@@ -33,7 +33,9 @@
       "Bash(ipconfig /flushdns)",
       "Bash(where git)",
       "Bash(powershell:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(del nul)",
+      "Bash(rm:*)"
     ],
     "deny": [],
     "ask": []

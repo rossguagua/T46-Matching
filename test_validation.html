@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据验证测试</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .field-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .field-item {
+            padding: 10px;
+            background: #f9f9f9;
+            border-left: 4px solid #2196F3;
+            border-radius: 4px;
+        }
+        .field-name {
+            font-weight: bold;
+            color: #333;
+        }
+        .field-status {
+            color: #666;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .required {
+            border-left-color: #FF5722;
+        }
+        .success {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .warning {
+            color: #FF9800;
+            font-weight: bold;
+        }
+        .error {
+            color: #F44336;
+            font-weight: bold;
+        }
+        .summary {
+            padding: 15px;
+            background: #E8F5E9;
+            border-radius: 4px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>T46 匹配系统 - 数据字段验证测试</h1>
+    
+    <div class="test-section">
+        <h2>实际Excel文件字段（从analyze_excel.py获取）</h2>
+        <div class="field-list">
+            <div class="field-item required">
+                <div class="field-name">自选昵称</div>
+                <div class="field-status">✅ 所有30条记录都已填写</div>
+            </div>
+            <div class="field-item required">
+                <div class="field-name">性别</div>
+                <div class="field-status">✅ 所有30条记录都已填写（男6女24）</div>
+            </div>
+            <div class="field-item required">
+                <div class="field-name">出生年份</div>
+                <div class="field-status">✅ 所有30条记录都已填写</div>
+            </div>
+            <div class="field-item">
+                <div class="field-name">年龄</div>
+                <div class="field-status">✅ 所有30条记录都已填写（20-32岁）</div>
+            </div>
+            <div class="field-item">
+                <div class="field-name">职业</div>
+                <div class="field-status">✅ 所有30条记录都已填写</div>
+            </div>
+            <div class="field-item">
+                <div class="field-name">上海常出没区域</div>
+                <div class="field-status">✅ 所有30条记录都已填写</div>
+            </div>
+            <div class="field-item">
+                <div class="field-name">情感气象</div>
+                <div class="field-status">✅ 所有30条记录都已填写</div>
+            </div>
+            <div class="field-item">
+                <div class="field-name">兴趣爱好</div>
+                <div class="field-status">⚠️ 所有30条记录都未填写（NaN）</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>系统配置更新</h2>
+        <h3>必填字段（DEFAULT_VALIDATION_RULES）</h3>
+        <ul>
+            <li class="success">✅ 自选昵称（已更新）</li>
+            <li class="success">✅ 性别（保持不变）</li>
+            <li class="success">✅ 出生年份（已更新，原为"年龄"）</li>
+        </ul>
+        
+        <h3>数据验证器更新</h3>
+        <ul>
+            <li class="success">✅ checkRequiredFields：简化逻辑，直接检查必填字段</li>
+            <li class="success">✅ validateAge：同时处理年龄和出生年份，检查一致性</li>
+            <li class="success">✅ checkDuplicates：检查自选昵称重复（原为姓名）</li>
+            <li class="success">✅ calculateStats：计算自选昵称唯一性（原为姓名）</li>
+        </ul>
+        
+        <h3>MatchingFlow组件更新</h3>
+        <ul>
+            <li class="success">✅ UserData接口：添加所有实际字段</li>
+            <li class="success">✅ 用户分析prompt：使用自选昵称而非姓名</li>
+            <li class="success">✅ 预览列：显示自选昵称、出生年份等实际字段</li>
+            <li class="success">✅ 结果显示：直接显示自选昵称，移除姓名fallback</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <h2>预期效果</h2>
+        <div class="summary">
+            <h3>✅ 问题已解决</h3>
+            <p>1. <strong>数据筛查页面</strong>现在会正确识别"自选昵称"字段为必填项</p>
+            <p>2. <strong>验证规则</strong>已更新为实际Excel中的字段名称</p>
+            <p>3. <strong>分组结果</strong>会正确显示每个人的自选昵称</p>
+            <p>4. <strong>年龄验证</strong>会同时检查年龄和出生年份的一致性</p>
+            <p>5. <strong>重复检测</strong>会检查自选昵称是否重复</p>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>测试建议</h2>
+        <ol>
+            <li>重新上传Excel文件（C:\Users\Ross\Desktop\未分组表.xlsx）</li>
+            <li>观察数据筛查页面是否正确识别所有字段</li>
+            <li>检查"自选昵称"是否被标记为必填且已填写</li>
+            <li>确认分组结果中显示的是自选昵称（如maria, Amber, 楚楚等）</li>
+            <li>验证年龄范围检查是否正常（18-40岁）</li>
+        </ol>
+    </div>
+</body>
+</html>

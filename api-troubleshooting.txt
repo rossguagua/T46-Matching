@@ -1,0 +1,130 @@
+# Google Generative AI API 连接故障排除指南
+
+## 常见错误类型及解决方案
+
+### 1. Error fetching from https://generativelanguage.googleapis.com/
+**可能原因**：
+- 网络连接问题
+- 防火墙阻止
+- DNS解析失败
+- API服务临时不可用
+
+**解决步骤**：
+```bash
+# 1. 检查网络连接
+ping google.com
+
+# 2. 检查DNS解析
+nslookup generativelanguage.googleapis.com
+
+# 3. 测试直接访问
+curl -I https://generativelanguage.googleapis.com/
+```
+
+### 2. API_KEY_INVALID 错误
+**可能原因**：
+- API密钥错误或过期
+- 密钥权限不足
+- 项目配置问题
+
+**解决步骤**：
+1. 访问 [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. 验证API密钥是否有效
+3. 检查项目权限设置
+4. 重新生成API密钥（如需要）
+
+### 3. QUOTA_EXCEEDED 错误
+**可能原因**：
+- 达到每分钟请求限制
+- 达到每日请求限制
+- 账户配额用完
+
+**解决步骤**：
+1. 检查 [API配额使用情况](https://console.cloud.google.com/apis/api/generativelanguage.googleapis.com/quotas)
+2. 等待配额重置
+3. 升级配额限制
+
+### 4. 网络代理/防火墙问题
+**解决步骤**：
+```bash
+# 设置代理（如使用公司网络）
+export HTTPS_PROXY=http://your-proxy:port
+export HTTP_PROXY=http://your-proxy:port
+
+# 或在代码中配置
+# 在fetch请求中添加代理设置
+```
+
+### 5. 模型不可用错误
+**可能原因**：
+- 请求的模型名称错误
+- 模型在当前地区不可用
+- 模型版本已废弃
+
+**当前使用的模型**：
+- gemini-2.5-flash-lite (用户分析)
+- gemini-2.5-pro (方案生成和审批)
+
+### 6. 代码层面的故障排除
+
+#### 检查环境变量
+```javascript
+console.log('API Key存在:', !!import.meta.env.VITE_GEMINI_API_KEY)
+console.log('API Key长度:', import.meta.env.VITE_GEMINI_API_KEY?.length)
+```
+
+#### 测试基本连接
+```javascript
+const testConnection = async () => {
+  try {
+    const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY)
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-lite" })
+    const result = await model.generateContent("Hello")
+    console.log("连接成功:", result.response.text())
+  } catch (error) {
+    console.error("连接失败:", error)
+  }
+}
+```
+
+## 当前项目状态检查
+
+### 环境变量配置
+- ✅ VITE_GEMINI_API_KEY 已设置
+- ✅ API密钥格式看起来正确
+
+### 可能的问题
+1. **网络环境**：检查是否在限制网络环境中
+2. **API权限**：验证密钥权限是否包含Generative AI
+3. **区域限制**：某些地区可能无法访问Gemini API
+4. **临时服务中断**：Google服务可能临时不可用
+
+## 建议的调试步骤
+
+1. **立即检查**：
+   - 打开浏览器开发者工具，查看网络请求详情
+   - 检查console中的详细错误信息
+
+2. **网络测试**：
+   - 尝试在浏览器中直接访问 https://generativelanguage.googleapis.com/
+   - 如果无法访问，说明是网络连接问题
+
+3. **API密钥验证**：
+   - 在Google AI Studio中重新测试密钥
+   - 尝试生成新的API密钥
+
+4. **fallback机制**：
+   - 当前代码已实现本地评分算法
+   - API失败时会自动使用本地智能评分
+   - 不会完全阻止程序运行
+
+## 应急方案
+如果API持续不可用，系统会：
+1. 使用本地智能评分算法
+2. 显示详细的评分过程日志
+3. 提供基于规则的分组建议
+4. 继续提供Excel导出功能
+
+---
+**更新时间**: 2025-08-20
+**状态**: 系统已具备API故障容错能力

@@ -217,22 +217,9 @@ const DataEditor: React.FC<DataEditorProps> = ({
           </div>
         )}
 
-        {/* 仅保留视图切换 */}
-        <div className="view-toggle-bar">
-          <label className="view-toggle-label">
-            <input
-              type="checkbox"
-              checked={showOnlyIssues}
-              onChange={(e) => setShowOnlyIssues(e.target.checked)}
-            />
-            <span>只显示有问题的数据</span>
-          </label>
-        </div>
-
-        {/* 内容区域包装器 */}
-        <div className="editor-content">
-          {/* 标签页切换 */}
-          <div className="editor-tabs">
+        {/* 工具栏：标签页和视图切换在同一行 */}
+        <div className="editor-toolbar">
+          <div className="toolbar-tabs">
             <button 
               className={`tab ${activeTab === 'data' ? 'active' : ''}`}
               onClick={() => setActiveTab('data')}
@@ -246,6 +233,21 @@ const DataEditor: React.FC<DataEditorProps> = ({
               问题列表 ({qualityReport ? qualityReport.issues.critical.length + qualityReport.issues.warning.length + qualityReport.issues.suggestion.length : 0})
             </button>
           </div>
+          
+          <div className="toolbar-actions">
+            <label className="view-toggle-label">
+              <input
+                type="checkbox"
+                checked={showOnlyIssues}
+                onChange={(e) => setShowOnlyIssues(e.target.checked)}
+              />
+              <span>只显示有问题的数据</span>
+            </label>
+          </div>
+        </div>
+
+        {/* 内容区域包装器 */}
+        <div className="editor-content">
 
           {/* 主内容区域 */}
           <div className="editor-main-area">
