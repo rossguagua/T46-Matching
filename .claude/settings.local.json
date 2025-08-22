@@ -35,7 +35,8 @@
       "Bash(powershell:*)",
       "Bash(grep:*)",
       "Bash(del nul)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
