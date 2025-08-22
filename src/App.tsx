@@ -3,6 +3,7 @@ import Sidebar, { NavigationPage } from './components/Sidebar'
 import MatchingFlow from './components/MatchingFlow'
 import RulesManagement from './components/RulesManagement'
 import LLMManagement from './components/LLMManagement'
+import SystemSettings from './components/SystemSettings'
 import DraggableApiMonitor from './components/DraggableApiMonitor'
 import { useApiConfig } from './hooks/useApiConfig'
 
@@ -415,115 +416,7 @@ function App() {
       case 'settings':
         return (
           <div className="page-wrapper">
-            <div className="settings-page">
-            <div className="page-header">
-              <h1 className="page-title">⚙️ 系统设置</h1>
-              <p className="page-subtitle">配置系统参数和偏好设置</p>
-            </div>
-            
-            <div className="settings-grid">
-              {/* API配置卡片 */}
-              <div className="settings-card">
-                <div className="settings-card-header">
-                  <h3>🌐 API配置</h3>
-                  <span className={`status-badge ${isConfigValid() ? 'success' : 'warning'}`}>
-                    {isConfigValid() ? '✅ 已配置' : '⚠️ 未配置'}
-                  </span>
-                </div>
-                <div className="settings-card-content">
-                  <div className="setting-row">
-                    <span className="setting-label">当前提供商</span>
-                    <span className="setting-value">{config.activeProvider || '未选择'}</span>
-                  </div>
-                  <div className="setting-row">
-                    <span className="setting-label">模型数量</span>
-                    <span className="setting-value">
-                      {config.providers?.[config.activeProvider]?.selectedModels 
-                        ? Object.keys(config.providers[config.activeProvider].selectedModels).length 
-                        : 0} 个
-                    </span>
-                  </div>
-                  <button 
-                    className="settings-button"
-                    onClick={() => onPageChange('llm-management')}
-                  >
-                    🔧 前往配置
-                  </button>
-                </div>
-              </div>
-
-              {/* 分组规则卡片 */}
-              <div className="settings-card">
-                <div className="settings-card-header">
-                  <h3>📋 分组规则</h3>
-                  <span className="status-badge success">✅ 活跃</span>
-                </div>
-                <div className="settings-card-content">
-                  <div className="setting-row">
-                    <span className="setting-label">每组人数</span>
-                    <span className="setting-value">6 人</span>
-                  </div>
-                  <div className="setting-row">
-                    <span className="setting-label">年龄差限制</span>
-                    <span className="setting-value">8 岁</span>
-                  </div>
-                  <button 
-                    className="settings-button"
-                    onClick={() => onPageChange('rules-management')}
-                  >
-                    🔧 管理规则
-                  </button>
-                </div>
-              </div>
-
-              {/* 数据管理卡片 */}
-              <div className="settings-card">
-                <div className="settings-card-header">
-                  <h3>🗄️ 数据管理</h3>
-                </div>
-                <div className="settings-card-content">
-                  <div className="setting-row">
-                    <span className="setting-label">缓存大小</span>
-                    <span className="setting-value">
-                      {localStorage.length} 项
-                    </span>
-                  </div>
-                  <button 
-                    className="settings-button danger"
-                    onClick={() => {
-                      if (confirm('确定要清除所有缓存数据吗？')) {
-                        localStorage.clear()
-                        window.location.reload()
-                      }
-                    }}
-                  >
-                    🗑️ 清除缓存
-                  </button>
-                </div>
-              </div>
-
-              {/* 系统信息卡片 */}
-              <div className="settings-card">
-                <div className="settings-card-header">
-                  <h3>ℹ️ 系统信息</h3>
-                </div>
-                <div className="settings-card-content">
-                  <div className="setting-row">
-                    <span className="setting-label">版本</span>
-                    <span className="setting-value">v1.0.0</span>
-                  </div>
-                  <div className="setting-row">
-                    <span className="setting-label">最后更新</span>
-                    <span className="setting-value">{new Date().toLocaleDateString()}</span>
-                  </div>
-                  <div className="setting-row">
-                    <span className="setting-label">开发团队</span>
-                    <span className="setting-value">T46 AI Team</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+            <SystemSettings />
           </div>
         )
       default:

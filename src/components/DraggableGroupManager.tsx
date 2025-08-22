@@ -11,6 +11,7 @@ interface DragState {
   draggedMember: any
   draggedFromGroup: string | 'unassigned'
   draggedOverGroup: string | 'unassigned' | null
+  draggedOverMemberName: string | null
 }
 
 const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, onGroupsChange }) => {
@@ -18,7 +19,8 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
     isDragging: false,
     draggedMember: null,
     draggedFromGroup: '',
-    draggedOverGroup: null
+    draggedOverGroup: null,
+    draggedOverMemberName: null
   })
 
   const handleDragStart = useCallback((e: React.DragEvent, member: any, groupId: string | 'unassigned') => {
@@ -26,7 +28,8 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
       isDragging: true,
       draggedMember: member,
       draggedFromGroup: groupId,
-      draggedOverGroup: null
+      draggedOverGroup: null,
+      draggedOverMemberName: null
     })
     e.dataTransfer.effectAllowed = 'move'
   }, [])
@@ -36,7 +39,8 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
       isDragging: false,
       draggedMember: null,
       draggedFromGroup: '',
-      draggedOverGroup: null
+      draggedOverGroup: null,
+      draggedOverMemberName: null
     })
   }, [])
 
@@ -50,8 +54,59 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
   }, [])
 
   const handleDragLeave = useCallback(() => {
-    setDragState(prev => ({ ...prev, draggedOverGroup: null }))
+    setDragState(prev => ({ ...prev, draggedOverGroup: null, draggedOverMemberName: null }))
   }, [])
+
+  const handleDragEnterMember = useCallback((memberName: string) => {
+    setDragState(prev => ({ ...prev, draggedOverMemberName: memberName }))
+  }, [])
+
+  const handleDragLeaveMember = useCallback(() => {
+    setDragState(prev => ({ ...prev, draggedOverMemberName: null }))
+  }, [])
+
+  const handleDropOnMember = useCallback((e: React.DragEvent, targetMember: any, targetGroupId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    
+    if (!dragState.draggedMember || dragState.draggedFromGroup !== 'unassigned') {
+      handleDragEnd()
+      return
+    }
+
+    const newGroups = [...result.groups]
+    let newUnassigned = [...(result.unassigned || [])]
+
+    // 从未分配列表中移除拖拽的成员
+    newUnassigned = newUnassigned.filter(m => 
+      m.自选昵称 !== dragState.draggedMember.自选昵称
+    )
+
+    // 找到目标组并进行互换
+    const targetGroup = newGroups.find(g => g.id === targetGroupId)
+    if (targetGroup) {
+      // 找到目标成员在组中的索引
+      const targetMemberIndex = targetGroup.members.findIndex(m => 
+        m.自选昵称 === targetMember.自选昵称
+      )
+      
+      if (targetMemberIndex !== -1) {
+        // 在原位置替换成员
+        targetGroup.members[targetMemberIndex] = dragState.draggedMember
+        // 将被替换的成员添加到未分配列表
+        newUnassigned.push(targetMember)
+      }
+    }
+
+    // 更新结果
+    onGroupsChange({
+      ...result,
+      groups: newGroups,
+      unassigned: newUnassigned
+    })
+
+    handleDragEnd()
+  }, [dragState, result, onGroupsChange, handleDragEnd])
 
   const handleDrop = useCallback((e: React.DragEvent, targetGroupId: string | 'unassigned') => {
     e.preventDefault()
@@ -126,14 +181,33 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
               {group.members.map((member, idx) => (
                 <div
                   key={idx}
-                  className="member-card draggable"
+                  className={`member-card draggable ${
+                    dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' 
+                      ? 'swap-target' 
+                      : ''
+                  }`}
                   draggable
                   onDragStart={(e) => handleDragStart(e, member, group.id)}
+                  onDragOver={handleDragOver}
+                  onDragEnter={() => {
+                    if (dragState.draggedFromGroup === 'unassigned') {
+                      handleDragEnterMember(member.自选昵称)
+                    }
+                  }}
+                  onDragLeave={handleDragLeaveMember}
+                  onDrop={(e) => {
+                    if (dragState.draggedFromGroup === 'unassigned') {
+                      handleDropOnMember(e, member, group.id)
+                    }
+                  }}
                 >
                   <div className="member-name">{member.自选昵称}</div>
                   <div className="member-info">
                     {member.年龄}岁 · {member.性别} · {member.职业}
                   </div>
+                  {dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' && (
+                    <div className="swap-indicator">⇄ 互换</div>
+                  )}
                 </div>
               ))}
             </div>
@@ -156,7 +230,11 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
             {result.unassigned.map((member, idx) => (
               <div
                 key={idx}
-                className="member-card draggable"
+                className={`member-card draggable ${
+                  dragState.isDragging && dragState.draggedMember === member 
+                    ? 'dragging' 
+                    : ''
+                }`}
                 draggable
                 onDragStart={(e) => handleDragStart(e, member, 'unassigned')}
               >
@@ -164,6 +242,9 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
                 <div className="member-info">
                   {member.年龄}岁 · {member.性别} · {member.职业}
                 </div>
+                {dragState.isDragging && dragState.draggedMember === member && (
+                  <div className="drag-hint">拖到组内成员上可互换</div>
+                )}
               </div>
             ))}
           </div>
@@ -256,6 +337,7 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
           cursor: move;
           transition: all 0.2s ease;
           border: 1px solid #e0e0e0;
+          position: relative;
         }
 
         .member-card.draggable:hover {
@@ -266,6 +348,54 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
 
         .member-card.draggable:active {
           opacity: 0.5;
+        }
+
+        .member-card.draggable.swap-target {
+          background: linear-gradient(135deg, rgba(255,107,53,0.1) 0%, rgba(255,142,83,0.1) 100%);
+          border: 2px solid #ff6b35;
+          transform: scale(1.05);
+          box-shadow: 0 4px 12px rgba(255,107,53,0.3);
+        }
+
+        .swap-indicator {
+          position: absolute;
+          top: 50%;
+          right: 10px;
+          transform: translateY(-50%);
+          background: #ff6b35;
+          color: white;
+          padding: 2px 8px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+          animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+          0% { transform: translateY(-50%) scale(1); }
+          50% { transform: translateY(-50%) scale(1.1); }
+          100% { transform: translateY(-50%) scale(1); }
+        }
+
+        .member-card.draggable.dragging {
+          opacity: 0.7;
+          border: 2px dashed #667eea;
+        }
+
+        .drag-hint {
+          position: absolute;
+          bottom: -20px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: #667eea;
+          color: white;
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-size: 11px;
+          font-weight: 600;
+          white-space: nowrap;
+          z-index: 1000;
+          box-shadow: 0 2px 8px rgba(102,126,234,0.3);
         }
 
         .member-name {
