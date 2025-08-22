@@ -186,77 +186,72 @@ const DataEditor: React.FC<DataEditorProps> = ({
             </div>
 
             <div className="quality-summary">
-              <div className="issue-counts">
-                <span className="issue-count critical">
-                  🔴 {qualityReport.issues.critical.length} 关键问题
-                </span>
-                <span className="issue-count warning">
-                  🟡 {qualityReport.issues.warning.length} 警告
-                </span>
-                <span className="issue-count suggestion">
-                  🔵 {qualityReport.issues.suggestion.length} 建议
-                </span>
+              <div className="issue-stats-container">
+                <div className="issue-stat-item">
+                  <span className="issue-stat-icon">🔴</span>
+                  <span className="issue-stat-number">{qualityReport.issues.critical.length}</span>
+                  <span className="issue-stat-label">关键问题</span>
+                </div>
+                <div className="issue-stat-item">
+                  <span className="issue-stat-icon">🟡</span>
+                  <span className="issue-stat-number">{qualityReport.issues.warning.length}</span>
+                  <span className="issue-stat-label">警告</span>
+                </div>
+                <div className="issue-stat-item">
+                  <span className="issue-stat-icon">🔵</span>
+                  <span className="issue-stat-number">{qualityReport.issues.suggestion.length}</span>
+                  <span className="issue-stat-label">建议</span>
+                </div>
               </div>
               
-              {qualityReport.recommendations.length > 0 && (
-                <div className="recommendations">
-                  {qualityReport.recommendations.map((rec, i) => (
-                    <div key={i} className="recommendation">{rec}</div>
-                  ))}
+              <div className="recommendation-box">
+                <div className="recommendation-icon">📝</div>
+                <div className="recommendation-text">
+                  {qualityReport.recommendations.length > 0 
+                    ? qualityReport.recommendations[0]
+                    : '建议补充缺失的信息，提高数据完整度'
+                  }
                 </div>
-              )}
+              </div>
             </div>
           </div>
         )}
 
-        {/* 操作按钮 */}
-        <div className="editor-actions">
-          <div className="action-group">
-            <button className="action-btn clean" onClick={handleCleanData}>
-              🧹 清洗数据
-            </button>
-            <button className="action-btn fix-all" onClick={handleFixAll}>
-              🔧 修复所有可修复问题
-            </button>
-            <button className="action-btn fix-selected" onClick={handleAutoFix} disabled={selectedIssues.size === 0}>
-              ✔️ 修复选中 ({selectedIssues.size})
-            </button>
-            <button className="action-btn add-row" onClick={handleAddRow}>
-              ➕ 添加行
-            </button>
-          </div>
-          
-          <div className="view-toggle">
-            <label>
-              <input
-                type="checkbox"
-                checked={showOnlyIssues}
-                onChange={(e) => setShowOnlyIssues(e.target.checked)}
-              />
-              只显示有问题的数据
-            </label>
-          </div>
+        {/* 仅保留视图切换 */}
+        <div className="view-toggle-bar">
+          <label className="view-toggle-label">
+            <input
+              type="checkbox"
+              checked={showOnlyIssues}
+              onChange={(e) => setShowOnlyIssues(e.target.checked)}
+            />
+            <span>只显示有问题的数据</span>
+          </label>
         </div>
 
-        {/* 标签页切换 */}
-        <div className="editor-tabs">
-          <button 
-            className={`tab ${activeTab === 'data' ? 'active' : ''}`}
-            onClick={() => setActiveTab('data')}
-          >
-            数据表格 ({editableData.length}行)
-          </button>
-          <button 
-            className={`tab ${activeTab === 'issues' ? 'active' : ''}`}
-            onClick={() => setActiveTab('issues')}
-          >
-            问题列表 ({qualityReport ? qualityReport.issues.critical.length + qualityReport.issues.warning.length + qualityReport.issues.suggestion.length : 0})
-          </button>
-        </div>
+        {/* 内容区域包装器 */}
+        <div className="editor-content">
+          {/* 标签页切换 */}
+          <div className="editor-tabs">
+            <button 
+              className={`tab ${activeTab === 'data' ? 'active' : ''}`}
+              onClick={() => setActiveTab('data')}
+            >
+              数据表格 ({editableData.length}行)
+            </button>
+            <button 
+              className={`tab ${activeTab === 'issues' ? 'active' : ''}`}
+              onClick={() => setActiveTab('issues')}
+            >
+              问题列表 ({qualityReport ? qualityReport.issues.critical.length + qualityReport.issues.warning.length + qualityReport.issues.suggestion.length : 0})
+            </button>
+          </div>
 
-        {/* 数据表格 */}
-        {activeTab === 'data' && (
-          <div className="data-table-container">
+          {/* 主内容区域 */}
+          <div className="editor-main-area">
+            {/* 数据表格 */}
+            {activeTab === 'data' && (
+              <div className="data-table-container">
             <table className="data-table">
               <thead>
                 <tr>
@@ -349,10 +344,12 @@ const DataEditor: React.FC<DataEditorProps> = ({
               <div className="issue-section critical">
                 <h3>🔴 关键问题（必须修复）</h3>
                 {qualityReport.issues.critical.map((issue, i) => (
-                  <div key={i} className="issue-item">
-                    <span className="issue-location">第{issue.row}行 - {issue.column}</span>
-                    <span className="issue-message">{issue.message}</span>
-                    <span className="issue-value">当前值: {issue.value || '空'}</span>
+                  <div key={i} className="issue-card critical">
+                    <div className="issue-content">
+                      <div className="issue-location">第{issue.row}行 - {issue.column}</div>
+                      <div className="issue-message">{issue.message}</div>
+                      <div className="issue-value">当前值: {issue.value || '空'}</div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -365,7 +362,7 @@ const DataEditor: React.FC<DataEditorProps> = ({
                 {qualityReport.issues.warning.map((issue, i) => {
                   const issueId = `${issue.row}-${issue.column}`
                   return (
-                    <div key={i} className="issue-item">
+                    <div key={i} className={`issue-card warning ${selectedIssues.has(issueId) ? 'selected' : ''}`}>
                       {issue.autoFixable && (
                         <input
                           type="checkbox"
@@ -381,12 +378,17 @@ const DataEditor: React.FC<DataEditorProps> = ({
                           }}
                         />
                       )}
-                      <span className="issue-location">第{issue.row}行 - {issue.column}</span>
-                      <span className="issue-message">{issue.message}</span>
-                      <span className="issue-value">当前值: {issue.value || '空'}</span>
-                      {issue.suggestion && (
-                        <span className="issue-suggestion">建议: {issue.suggestion}</span>
-                      )}
+                      <div className="issue-content">
+                        <div className="issue-location">
+                          第{issue.row}行 - {issue.column}
+                          {issue.autoFixable && <span className="auto-fixable">可自动修复</span>}
+                        </div>
+                        <div className="issue-message">{issue.message}</div>
+                        <div className="issue-value">当前值: {issue.value || '空'}</div>
+                        {issue.suggestion && (
+                          <div className="issue-suggestion">💡 {issue.suggestion}</div>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
@@ -400,7 +402,7 @@ const DataEditor: React.FC<DataEditorProps> = ({
                 {qualityReport.issues.suggestion.map((issue, i) => {
                   const issueId = `${issue.row}-${issue.column}`
                   return (
-                    <div key={i} className="issue-item">
+                    <div key={i} className={`issue-card suggestion ${selectedIssues.has(issueId) ? 'selected' : ''}`}>
                       {issue.autoFixable && (
                         <input
                           type="checkbox"
@@ -416,35 +418,53 @@ const DataEditor: React.FC<DataEditorProps> = ({
                           }}
                         />
                       )}
-                      <span className="issue-location">第{issue.row}行 - {issue.column}</span>
-                      <span className="issue-message">{issue.message}</span>
-                      <span className="issue-value">当前值: {issue.value || '空'}</span>
-                      {issue.suggestion && (
-                        <span className="issue-suggestion">建议: {issue.suggestion}</span>
-                      )}
+                      <div className="issue-content">
+                        <div className="issue-location">
+                          第{issue.row}行 - {issue.column}
+                          {issue.autoFixable && <span className="auto-fixable">可自动修复</span>}
+                        </div>
+                        <div className="issue-message">{issue.message}</div>
+                        <div className="issue-value">当前值: {issue.value || '空'}</div>
+                        {issue.suggestion && (
+                          <div className="issue-suggestion">💡 {issue.suggestion}</div>
+                        )}
+                      </div>
                     </div>
                   )
                 })}
               </div>
             )}
           </div>
-        )}
+            )}
+          </div>
+        </div>
 
         {/* 底部操作 */}
-        <div className="editor-footer">
-          <button className="cancel-btn" onClick={onCancel}>
-            取消
-          </button>
-          <button 
-            className="confirm-btn"
-            onClick={handleConfirm}
-            disabled={qualityReport && qualityReport.issues.critical.length > 0}
-          >
-            {qualityReport && qualityReport.issues.critical.length > 0 
-              ? `请先修复${qualityReport.issues.critical.length}个关键问题`
-              : '确认并继续'
-            }
-          </button>
+        <div className="action-footer">
+          <div className="footer-stats">
+            <span>共 {editableData.length} 条数据</span>
+            {qualityReport && (
+              <>
+                <span>质量分: {qualityReport.score}/100</span>
+                <span>问题数: {qualityReport.issues.critical.length + qualityReport.issues.warning.length + qualityReport.issues.suggestion.length}</span>
+              </>
+            )}
+          </div>
+          <div className="footer-buttons">
+            <button className="btn btn-secondary" onClick={onCancel}>
+              取消
+            </button>
+            <button 
+              className="btn btn-primary"
+              onClick={handleConfirm}
+              disabled={qualityReport && qualityReport.issues.critical.length > 0}
+            >
+              {qualityReport && qualityReport.issues.critical.length > 0 
+                ? `请先修复${qualityReport.issues.critical.length}个关键问题`
+                : '确认并继续'
+              }
+            </button>
+          </div>
         </div>
       </div>
     </div>

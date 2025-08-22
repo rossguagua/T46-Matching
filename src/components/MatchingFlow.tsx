@@ -284,25 +284,96 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
   const analyzeDataSummary = useCallback((data: UserData[]): DataSummary => {
     const totalUsers = data.length
     
-    // 计算平均年龄
-    const ages = data.map(user => Number(user.年龄) || 0).filter(age => age > 0)
+    // 计算平均年龄 - 处理多种可能的字段名
+    const ages: number[] = []
+    data.forEach(user => {
+      // 尝试不同的年龄字段
+      let age = Number(user.年龄) || Number(user.age) || Number(user.Age) || 0
+      
+      // 如果没有年龄字段，尝试从出生年份计算
+      if (!age && user.出生年份) {
+        const birthYear = Number(user.出生年份)
+        if (birthYear > 1900 && birthYear < 2010) {
+          age = new Date().getFullYear() - birthYear
+        }
+      }
+      
+      // 如果年龄在合理范围内，添加到数组
+      if (age > 0 && age < 100) {
+        ages.push(age)
+      }
+    })
     const averageAge = ages.length > 0 ? Math.round(ages.reduce((sum, age) => sum + age, 0) / ages.length * 10) / 10 : 0
     
-    // 统计性别比例
+    // 统计性别比例 - 处理各种可能的输入格式
     const genderCount = { 男: 0, 女: 0, 其他: 0 }
     data.forEach(user => {
-      const gender = user.性别
-      if (gender === '男' || gender === '男性') genderCount.男++
-      else if (gender === '女' || gender === '女性') genderCount.女++
-      else if (gender) genderCount.其他++
+      const gender = String(user.性别 || user.gender || user.Gender || '').trim().toLowerCase()
+      
+      if (gender === '男' || gender === '男性' || gender === 'male' || gender === 'm' || gender === '1') {
+        genderCount.男++
+      } else if (gender === '女' || gender === '女性' || gender === 'female' || gender === 'f' || gender === '2') {
+        genderCount.女++
+      } else if (gender && gender !== 'undefined' && gender !== 'null' && gender !== '') {
+        genderCount.其他++
+      }
     })
     
-    // 计算平均开放度（使用"对于现场话题和游戏的开放程度，你的接受度"字段）
-    const openness = data.map(user => {
-      const value = user['对于现场话题和游戏的开放程度，你的接受度']
-      return value !== undefined && value !== null ? Number(value) : 0
-    }).filter(v => v > 0)
-    const averageOpenness = openness.length > 0 ? Math.round(openness.reduce((sum, v) => sum + v, 0) / openness.length * 10) / 10 : 0
+    // 计算平均开放度 - 查找各种可能的字段名
+    const openness: number[] = []
+    data.forEach(user => {
+      // 尝试查找包含"开放"关键词的字段
+      let opennessValue: number | undefined
+      
+      // 直接查找已知字段
+      const possibleFields = [
+        '对于现场话题和游戏的开放程度，你的接受度',
+        '开放度',
+        'openness',
+        '接受度',
+        '社交开放度'
+      ]
+      
+      for (const field of possibleFields) {
+        if (user[field] !== undefined && user[field] !== null) {
+          const val = Number(user[field])
+          if (!isNaN(val) && val > 0) {
+            opennessValue = val
+            break
+          }
+        }
+      }
+      
+      // 如果还没找到，搜索包含"开放"的字段
+      if (!opennessValue) {
+        for (const key of Object.keys(user)) {
+          if (key.includes('开放') || key.includes('接受')) {
+            const val = Number(user[key])
+            if (!isNaN(val) && val > 0 && val <= 10) {
+              opennessValue = val
+              break
+            }
+          }
+        }
+      }
+      
+      if (opennessValue && opennessValue > 0 && opennessValue <= 10) {
+        openness.push(opennessValue)
+      }
+    })
+    
+    const averageOpenness = openness.length > 0 
+      ? Math.round(openness.reduce((sum, v) => sum + v, 0) / openness.length * 10) / 10 
+      : 0
+    
+    console.log('数据统计结果:', {
+      totalUsers,
+      averageAge,
+      agesCount: ages.length,
+      genderCount,
+      opennessCount: openness.length,
+      averageOpenness
+    })
     
     return {
       totalUsers,
@@ -771,9 +842,12 @@ ${group.members.map((member, j) => `  ${j+1}. ${member.自选昵称 || '未知'}
     // 数据已经通过onDataChange更新
     setShowDataEditor(false)
     
-    // 计算数据统计
-    const summary = analyzeDataSummary(userData)
-    setDataSummary(summary)
+    // 确保使用最新的用户数据计算统计
+    if (userData && userData.length > 0) {
+      const summary = analyzeDataSummary(userData)
+      setDataSummary(summary)
+      console.log('数据编辑器确认，统计信息:', summary)
+    }
     
     setAppState('preview')
   }, [userData, analyzeDataSummary])
@@ -786,8 +860,13 @@ ${group.members.map((member, j) => `  ${j+1}. ${member.自选昵称 || '未知'}
   }, [])
 
   const handleDataChange = useCallback((data: any[]) => {
-    setUserData(data as UserData[])
-  }, [])
+    const users = data as UserData[]
+    setUserData(users)
+    // 实时更新统计信息
+    const summary = analyzeDataSummary(users)
+    setDataSummary(summary)
+    console.log('数据更新，新统计信息:', summary)
+  }, [analyzeDataSummary])
 
   // 渲染函数
   const renderUploadPage = () => (
