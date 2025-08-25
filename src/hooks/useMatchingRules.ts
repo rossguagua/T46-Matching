@@ -26,27 +26,34 @@ export const useMatchingRules = () => {
   }, [loadRules])
 
   // 生成分组Prompt
-  const generateGroupingPrompt = useCallback((profiles: any[]) => {
+  const generateGroupingPrompt = useCallback((profiles: any[], userData?: any[]) => {
     const currentRules = loadRules()
     
     let prompt = `请根据以下用户档案生成智能分组方案，每组${currentRules.hardRules.groupSize}人，返回JSON格式：
 
 用户档案：
-${profiles.map((p, i) => `
+${profiles.map((p, i) => {
+  const originalUser = userData?.[i] || {}
+  return `
 用户${i+1} (${p.user_id}):
+- 基本信息: ${originalUser.自选昵称 || '未知'}, ${originalUser.年龄 || '?'}岁, ${originalUser.性别 || '未知'}
 - 性格总结: ${p.personality_summary}
 - 社交风格: ${p.social_style}
 - 兴趣标签: ${p.interests.join(', ')}
 - 能量水平: ${p.energy_level}
 - 对话风格: ${p.conversation_style}
 - 角色预测: ${p.group_role_prediction}
-- 性格关键词: ${p.personality_keywords.join(', ')}
-`).join('\n')}
+- 性格关键词: ${p.personality_keywords.join(', ')}`
+}).join('\n')}
 
 分组原则：
-1. 每组恰好${currentRules.hardRules.groupSize}人
-2. 年龄相差不超过${currentRules.hardRules.maxAgeGap}岁
-3. 性别尽量均衡(理想${currentRules.hardRules.genderBalance.ideal.male}:${currentRules.hardRules.genderBalance.ideal.female}，可接受${currentRules.hardRules.genderBalance.acceptable.male}:${currentRules.hardRules.genderBalance.acceptable.female})`
+
+【硬性约束 - 必须严格遵守】
+1. 每组必须恰好${currentRules.hardRules.groupSize}人
+2. ⚠️ 重要：组内任意两人年龄差必须不超过${currentRules.hardRules.maxAgeGap}岁（例如：如果组内有25岁的成员，其他成员年龄必须在22-28岁之间）
+3. 性别尽量均衡(理想${currentRules.hardRules.genderBalance.ideal.male}:${currentRules.hardRules.genderBalance.ideal.female}，可接受${currentRules.hardRules.genderBalance.acceptable.male}:${currentRules.hardRules.genderBalance.acceptable.female})
+
+⚠️ 违反年龄差约束的分组将被视为无效！请确保每组内所有成员的年龄跨度不超过${currentRules.hardRules.maxAgeGap}岁。`
 
     // 添加软性规则
     if (currentRules.softRules.interests.enabled) {
@@ -108,10 +115,20 @@ ${group.members.map((member: any, j: number) => `  ${j+1}. ${member.姓名 || '�
 `).join('\n')}
 
 评分标准：
-- 硬性约束: 年龄差≤${currentRules.hardRules.maxAgeGap}岁, 性别比例${currentRules.hardRules.genderBalance.strict ? '必须' : '尽量'}符合要求, 人数=${currentRules.hardRules.groupSize}
-- 软性匹配权重: 兴趣重叠(${currentRules.softRules.interests.weight}), 社交平衡(${currentRules.softRules.socialStyle.weight}), 能量协调(${currentRules.softRules.energyLevel.weight})
+【硬性约束检查 - 违反任一条直接扣3分以上】
+- ⚠️ 年龄差必须≤${currentRules.hardRules.maxAgeGap}岁（检查每组内最大年龄与最小年龄的差值）
+- 人数必须=${currentRules.hardRules.groupSize}人
+- 性别比例${currentRules.hardRules.genderBalance.strict ? '必须' : '尽量'}符合要求
+
+【软性匹配权重】
+- 兴趣重叠(权重${currentRules.softRules.interests.weight})
+- 社交平衡(权重${currentRules.softRules.socialStyle.weight})
+- 能量协调(权重${currentRules.softRules.energyLevel.weight})
+
+【评分规则】
 - 基础分数7.0，根据匹配质量加减分
-- 违反硬性约束直接大幅扣分
+- 违反年龄差约束：每组扣3分
+- 违反人数约束：每组扣2分
 - 通过线: ${currentRules.scoring.passThreshold}分
 - 优秀线: ${currentRules.scoring.excellentThreshold}分
 - 完美线: ${currentRules.scoring.perfectThreshold}分`

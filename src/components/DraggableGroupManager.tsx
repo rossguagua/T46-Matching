@@ -171,6 +171,15 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
               <h3 className="group-title">{group.name}</h3>
               <div className="group-stats">
                 <span className="member-count">{group.members.length}人</span>
+                {(() => {
+                  const ages = group.members.map(m => Number(m.年龄) || 0).filter(age => age > 0)
+                  const ageGap = ages.length > 0 ? Math.max(...ages) - Math.min(...ages) : 0
+                  return (
+                    <span className={`age-gap ${ageGap > 3 ? 'warning' : 'ok'}`}>
+                      年龄差: {ageGap}岁
+                    </span>
+                  )
+                })()}
                 <span className="group-score">
                   匹配度: {group.compatibility_score?.toFixed(2) || '0.00'}
                 </span>
@@ -306,6 +315,29 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
           border-radius: 12px;
           font-size: 12px;
           font-weight: 600;
+        }
+
+        .age-gap {
+          padding: 4px 10px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .age-gap.ok {
+          background: #d4edda;
+          color: #155724;
+        }
+
+        .age-gap.warning {
+          background: #f8d7da;
+          color: #721c24;
+          animation: pulse-warning 2s infinite;
+        }
+
+        @keyframes pulse-warning {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.7; }
         }
 
         .group-score {

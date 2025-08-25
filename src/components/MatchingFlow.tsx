@@ -205,11 +205,12 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     ))
   }, [])
 
-  // 通用LLM调用函数
+  // 通用LLM调用函数（带重试机制）
   const callLLM = useCallback(async (
     prompt: string,
     modelType: 'analysis' | 'generation' | 'review',
-    operation: string
+    operation: string,
+    maxRetries: number = 3
   ): Promise<string> => {
     const { provider, config: providerConfig } = getActiveProviderConfig()
     
@@ -227,32 +228,52 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
       throw new Error(`找不到模型${modelId}`)
     }
 
-    const startTime = Date.now()
-    try {
-      const response = await llmAdapter.generateContent(prompt, {
-        provider: provider.name as any,
-        model: modelId,
-        temperature: model.temperature,
-        maxTokens: model.maxTokens,
-        apiKey: providerConfig.apiKey
-      })
+    let lastError: any = null
 
-      if (response.error) {
-        throw new Error(response.error)
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const startTime = Date.now()
+      
+      try {
+        console.log(`🔄 ${operation} (尝试 ${attempt}/${maxRetries})`)
+        
+        const response = await llmAdapter.generateContent(prompt, {
+          provider: provider.name as any,
+          model: modelId,
+          temperature: model.temperature,
+          maxTokens: model.maxTokens,
+          apiKey: providerConfig.apiKey
+        })
+
+        if (response.error) {
+          throw new Error(response.error)
+        }
+
+        if (!response.text || response.text.length < 10) {
+          throw new Error(`${modelId} API返回过短(${response.text.length}字符)`)
+        }
+
+        const duration = Date.now() - startTime
+        onApiCall?.(modelId, operation, 'success', duration, provider.name)
+        return response.text
+      } catch (error) {
+        const duration = Date.now() - startTime
+        lastError = error
+        console.warn(`❌ ${operation}失败 (尝试 ${attempt}/${maxRetries}):`, error)
+        
+        // 如果是最后一次尝试，记录错误并抛出
+        if (attempt === maxRetries) {
+          onApiCall?.(modelId, operation, 'error', duration, provider.name)
+          throw error
+        }
+        
+        // 等待一段时间后重试（指数退避）
+        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 5000)
+        console.log(`⏳ ${waitTime}ms后重试...`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
       }
-
-      if (!response.text || response.text.length < 10) {
-        throw new Error(`${modelId} API返回过短(${response.text.length}字符)`)
-      }
-
-      const duration = Date.now() - startTime
-      onApiCall?.(modelId, operation, 'success', duration, provider.name)
-      return response.text
-    } catch (error) {
-      const duration = Date.now() - startTime
-      onApiCall?.(modelId, operation, 'error', duration, provider.name)
-      throw error
     }
+    
+    throw lastError || new Error('请求失败')
   }, [getActiveProviderConfig, isConfigValid, llmAdapter, onApiCall])
 
   // 其他函数保持不变，但使用callLLM...
@@ -419,7 +440,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
 
       // 第五步：智能优化循环
       updateProgress(5, 'running', '正在进行智能优化...', 0)
-      const optimizedResult = await optimizeGrouping(reviewResults)
+      const optimizedResult = await optimizeGrouping(reviewResults, proposals)
       updateProgress(5, 'completed', '优化完成', 100)
 
       // 第六步：最终确认输出
@@ -463,7 +484,21 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
 
         try {
           const result = await callLLM(analysisPrompt, 'analysis', `用户分析-${userIndex+1}`)
-          const cleanedResult = result.replace(/```json\s*|\s*```/g, '').trim()
+          // 更严格的JSON清理
+          let cleanedResult = result.replace(/```json\s*|\s*```/g, '').trim()
+          // 移除可能的尾部逗号
+          cleanedResult = cleanedResult.replace(/,\s*([}\]])/g, '$1')
+          // 尝试修复未闭合的字符串
+          if ((cleanedResult.match(/"/g) || []).length % 2 !== 0) {
+            cleanedResult += '"'
+          }
+          // 尝试修复未闭合的括号
+          const openBraces = (cleanedResult.match(/{/g) || []).length
+          const closeBraces = (cleanedResult.match(/}/g) || []).length
+          if (openBraces > closeBraces) {
+            cleanedResult += '}'.repeat(openBraces - closeBraces)
+          }
+          
           const profile = JSON.parse(cleanedResult) as UserProfile
           profile.user_id = `user_${userIndex + 1}`
           return profile
@@ -505,14 +540,157 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     return profiles
   }, [])
 
+  // 验证并修正分组的年龄约束
+  const validateAndFixAgeConstraints = useCallback((proposal: GroupingProposal): GroupingProposal => {
+    const maxAgeGap = rules.hardRules.maxAgeGap
+    const groupSize = rules.hardRules.groupSize
+    const fixedGroups: Group[] = []
+    let allUnassignedMembers: UserData[] = [...(proposal.unassigned || [])]
+    
+    console.log('开始验证年龄约束，规则:', { maxAgeGap, groupSize })
+    
+    // 先收集所有需要重新分配的成员
+    let membersToReassign: UserData[] = []
+    
+    // 检查每个组的年龄约束
+    proposal.groups.forEach(group => {
+      const members = [...group.members]
+      const ages = members.map(m => Number(m.年龄) || 0).filter(age => age > 0)
+      
+      if (ages.length === 0) {
+        // 如果没有年龄信息，保持原组
+        fixedGroups.push(group)
+        return
+      }
+      
+      const maxAge = Math.max(...ages)
+      const minAge = Math.min(...ages)
+      const ageGap = maxAge - minAge
+      
+      if (ageGap <= maxAgeGap && members.length === groupSize) {
+        // 年龄差符合要求且人数正确，保持原组
+        fixedGroups.push(group)
+      } else {
+        // 需要重新分配
+        console.warn(`组 ${group.name} 年龄差为 ${ageGap} 岁或人数不对，需要重新分配`)
+        membersToReassign.push(...members)
+      }
+    })
+    
+    // 如果有成员需要重新分配
+    if (membersToReassign.length > 0) {
+      // 将所有待分配成员（包括原本未分配的）合并并按年龄排序
+      const allMembers = [...membersToReassign, ...allUnassignedMembers]
+      console.log('需要重新分配的成员总数:', allMembers.length)
+      const sortedMembers = allMembers.sort((a, b) => {
+        const ageA = Number(a.年龄) || 0
+        const ageB = Number(b.年龄) || 0
+        return ageA - ageB
+      })
+      
+      // 重新分组算法：尝试创建符合年龄约束的小组
+      let remainingMembers = [...sortedMembers]
+      let finalUnassigned: UserData[] = []
+      
+      // 贪心算法：尽可能创建符合约束的组
+      while (remainingMembers.length >= groupSize) {
+        let bestGroup: UserData[] | null = null
+        let bestGroupIndices: number[] = []
+        let minAgeGap = Infinity
+        
+        // 尝试找到年龄差最小的一组
+        for (let i = 0; i <= remainingMembers.length - groupSize; i++) {
+          const candidateGroup = remainingMembers.slice(i, i + groupSize)
+          const ages = candidateGroup.map(m => Number(m.年龄) || 0)
+          const maxAge = Math.max(...ages)
+          const minAge = Math.min(...ages)
+          const ageGap = maxAge - minAge
+          
+          if (ageGap <= maxAgeGap && ageGap < minAgeGap) {
+            bestGroup = candidateGroup
+            bestGroupIndices = Array.from({length: groupSize}, (_, idx) => i + idx)
+            minAgeGap = ageGap
+          }
+        }
+        
+        if (bestGroup) {
+          // 找到了符合条件的组
+          const ages = bestGroup.map(m => Number(m.年龄) || 0)
+          const maxAge = Math.max(...ages)
+          const minAge = Math.min(...ages)
+          
+          fixedGroups.push({
+            id: `group_${fixedGroups.length + 1}`,
+            name: `第${fixedGroups.length + 1}组（${minAge}-${maxAge}岁）`,
+            members: bestGroup,
+            description: `年龄相近组（${minAge}-${maxAge}岁）`,
+            compatibility_score: 8.5 - minAgeGap * 0.2
+          })
+          
+          // 从剩余成员中移除已分组的成员
+          remainingMembers = remainingMembers.filter((_, idx) => !bestGroupIndices.includes(idx))
+        } else {
+          // 无法再创建符合条件的组，剩余的都放入未分配
+          break
+        }
+      }
+      
+      // 剩余的成员放入未分配
+      finalUnassigned = [...remainingMembers]
+      
+      // 确保所有人都被分配或标记为未分配
+      console.log('重新分配完成:', {
+        fixedGroupsCount: fixedGroups.length,
+        finalUnassignedCount: finalUnassigned.length,
+        totalAfterReassign: fixedGroups.reduce((sum, g) => sum + g.members.length, 0) + finalUnassigned.length
+      })
+      
+      allUnassignedMembers = finalUnassigned
+    }
+    
+    const result = {
+      ...proposal,
+      groups: fixedGroups,
+      unassigned: allUnassignedMembers,
+      strategy: proposal.strategy + '\n[已应用年龄约束自动修正]'
+    }
+    
+    console.log('validateAndFixAgeConstraints 最终结果:', {
+      groupCount: result.groups.length,
+      unassignedCount: result.unassigned.length,
+      totalMembers: result.groups.reduce((sum, g) => sum + g.members.length, 0) + result.unassigned.length
+    })
+    
+    return result
+  }, [rules.hardRules.maxAgeGap, rules.hardRules.groupSize])
+
   // 生成分组方案
   const generateGroupingProposals = useCallback(async (profiles: UserProfile[]): Promise<GroupingProposal[]> => {
-    // 使用规则管理中的配置生成Prompt
-    const groupingPrompt = generateGroupingPrompt(profiles)
+    // 使用规则管理中的配置生成Prompt，传递原始用户数据以包含年龄等信息
+    const groupingPrompt = generateGroupingPrompt(profiles, userData)
 
     try {
       const result = await callLLM(groupingPrompt, 'generation', '分组方案生成')
-      const cleanedResult = result.replace(/```json\s*|\s*```/g, '').trim()
+      // 更严格的JSON清理
+      let cleanedResult = result.replace(/```json\s*|\s*```/g, '').trim()
+      // 移除可能的尾部逗号
+      cleanedResult = cleanedResult.replace(/,\s*([}\]])/g, '$1')
+      // 尝试修复未闭合的字符串
+      if ((cleanedResult.match(/"/g) || []).length % 2 !== 0) {
+        cleanedResult += '"'
+      }
+      // 尝试修复未闭合的括号
+      const openBraces = (cleanedResult.match(/{/g) || []).length
+      const closeBraces = (cleanedResult.match(/}/g) || []).length
+      if (openBraces > closeBraces) {
+        cleanedResult += '}'.repeat(openBraces - closeBraces)
+      }
+      const openBrackets = (cleanedResult.match(/\[/g) || []).length
+      const closeBrackets = (cleanedResult.match(/\]/g) || []).length
+      if (openBrackets > closeBrackets) {
+        cleanedResult += ']'.repeat(openBrackets - closeBrackets)
+      }
+      
       const proposal = JSON.parse(cleanedResult) as GroupingProposal
       
       // 转换索引为实际用户数据
@@ -522,41 +700,110 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
         compatibility_score: 7.5 // 初始分数，等待审批
       }))
       
-      return [{
+      const rawProposal = {
         groups: processedGroups,
         unassigned: (proposal.unassigned as unknown as number[]).map(index => userData[index]).filter(Boolean),
         strategy: proposal.strategy,
         reasoning: proposal.reasoning
-      }]
+      }
+      
+      console.log('原始分组方案:', {
+        groupCount: rawProposal.groups.length,
+        groups: rawProposal.groups.map(g => ({
+          name: g.name,
+          memberCount: g.members.length,
+          ages: g.members.map(m => m.年龄)
+        })),
+        unassignedCount: rawProposal.unassigned.length
+      })
+      
+      // 验证并修正年龄约束
+      const fixedProposal = validateAndFixAgeConstraints(rawProposal)
+      
+      console.log('修正后分组方案:', {
+        groupCount: fixedProposal.groups.length,
+        groups: fixedProposal.groups.map(g => ({
+          name: g.name,
+          memberCount: g.members.length,
+          ages: g.members.map(m => m.年龄)
+        })),
+        unassignedCount: fixedProposal.unassigned.length
+      })
+      
+      return [fixedProposal]
     } catch (error) {
       console.warn('分组生成失败，使用简单分组算法:', error)
-      return [generateSimpleGrouping()]
+      const simpleGrouping = generateSimpleGrouping()
+      
+      console.log('简单分组结果:', {
+        groupCount: simpleGrouping.groups.length,
+        unassignedCount: simpleGrouping.unassigned.length,
+        totalMembers: simpleGrouping.groups.reduce((sum, g) => sum + g.members.length, 0) + simpleGrouping.unassigned.length
+      })
+      
+      // 对简单分组也进行年龄约束验证
+      const validatedGrouping = validateAndFixAgeConstraints(simpleGrouping)
+      
+      console.log('验证后的简单分组:', {
+        groupCount: validatedGrouping.groups.length,
+        unassignedCount: validatedGrouping.unassigned.length,
+        totalMembers: validatedGrouping.groups.reduce((sum, g) => sum + g.members.length, 0) + validatedGrouping.unassigned.length
+      })
+      
+      return [validatedGrouping]
     }
-  }, [callLLM, userData])
+  }, [callLLM, userData, generateGroupingPrompt, validateAndFixAgeConstraints])
 
   // 生成简单分组作为后备方案
   const generateSimpleGrouping = useCallback((): GroupingProposal => {
     const groupSize = rules.hardRules.groupSize // 从规则管理获取组大小
+    const maxAgeGap = rules.hardRules.maxAgeGap // 获取年龄差约束
     const groups: Group[] = []
     const unassignedMembers: UserData[] = []
     
-    for (let i = 0; i < userData.length; i += groupSize) {
-      const members = userData.slice(i, i + groupSize)
+    // 先按年龄排序，确保年龄相近的人分在一组
+    const sortedUsers = [...userData].sort((a, b) => {
+      const ageA = Number(a.年龄) || 0
+      const ageB = Number(b.年龄) || 0
+      return ageA - ageB
+    })
+    
+    for (let i = 0; i < sortedUsers.length; i += groupSize) {
+      const members = sortedUsers.slice(i, i + groupSize)
       
-      // 严格按照规则：只有满足组大小才创建组
+      // 检查组内年龄差
       if (members.length === groupSize) {
-        groups.push({
-          id: `group_${groups.length + 1}`,
-          name: `第${groups.length + 1}组：智能匹配组`,
-          description: '基于规则的智能分组',
-          members,
-          compatibility_score: 7.0
-        })
+        const ages = members.map(m => Number(m.年龄) || 0).filter(age => age > 0)
+        const maxAge = Math.max(...ages)
+        const minAge = Math.min(...ages)
+        const ageGap = maxAge - minAge
+        
+        // 只有满足年龄差约束才创建组
+        if (ageGap <= maxAgeGap) {
+          groups.push({
+            id: `group_${groups.length + 1}`,
+            name: `第${groups.length + 1}组：智能匹配组`,
+            description: `基于规则的智能分组（年龄跨度${ageGap}岁）`,
+            members,
+            compatibility_score: 7.0
+          })
+        } else {
+          // 年龄差过大的组员作为未分配
+          unassignedMembers.push(...members)
+        }
       } else {
         // 不足的人员作为剩余
         unassignedMembers.push(...members)
       }
     }
+    
+    console.log('generateSimpleGrouping 生成结果:', {
+      userDataLength: userData.length,
+      sortedUsersLength: sortedUsers.length,
+      groupsCreated: groups.length,
+      unassignedCount: unassignedMembers.length,
+      totalProcessed: groups.reduce((sum, g) => sum + g.members.length, 0) + unassignedMembers.length
+    })
     
     return {
       groups,
@@ -564,7 +811,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
       strategy: `基础算法分组（${groupSize}人/组）`,
       reasoning: `严格按照规则管理设置：每组${groupSize}人，剩余${unassignedMembers.length}人待分配`
     }
-  }, [userData, rules.hardRules.groupSize])
+  }, [userData, rules.hardRules.groupSize, rules.hardRules.maxAgeGap])
 
   // 审批分组方案
   const reviewGroupingProposals = useCallback(async (proposals: GroupingProposal[]): Promise<ReviewResult[]> => {
@@ -576,7 +823,17 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
 
       try {
         const result = await callLLM(reviewPrompt, 'review', `方案审批-${results.length + 1}`)
-        const cleanedResult = result.replace(/```json\s*|\s*```/g, '').trim()
+        // 更严格的JSON清理
+        let cleanedResult = result.replace(/```json\s*|\s*```/g, '').trim()
+        
+        // 检查是否为非JSON响应
+        if (cleanedResult.startsWith('请') || cleanedResult.startsWith('错误') || !cleanedResult.startsWith('{')) {
+          throw new Error('LLM返回了非JSON格式的响应: ' + cleanedResult.substring(0, 100))
+        }
+        
+        // 移除可能的尾部逗号
+        cleanedResult = cleanedResult.replace(/,\s*([}\]])/g, '$1')
+        
         const review = JSON.parse(cleanedResult) as ReviewResult
         results.push(review)
       } catch (error) {
@@ -596,55 +853,73 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
   }, [callLLM])
 
   // 优化分组
-  const optimizeGrouping = useCallback(async (reviewResults: ReviewResult[]): Promise<MatchingResult> => {
+  const optimizeGrouping = useCallback(async (reviewResults: ReviewResult[], proposals: GroupingProposal[]): Promise<MatchingResult> => {
     // 选择最佳方案或进行优化
-    const bestReview = reviewResults.reduce((best, current) => 
-      current.overall_score > best.overall_score ? current : best
+    const bestReviewIndex = reviewResults.reduce((bestIdx, current, idx) => 
+      current.overall_score > reviewResults[bestIdx].overall_score ? idx : bestIdx, 0
     )
+    
+    const bestReview = reviewResults[bestReviewIndex]
+    const bestProposal = proposals[bestReviewIndex]
     
     await new Promise(resolve => setTimeout(resolve, 1000)) // 模拟优化过程
     
+    // 保留最佳方案的分组信息
     return {
-      groups: [], // 这里需要从方案中恢复组信息
-      unassigned: [],
+      groups: bestProposal.groups.map(g => ({
+        ...g,
+        compatibility_score: bestReview.group_scores?.[g.id] || bestReview.overall_score || 7.5
+      })),
+      unassigned: bestProposal.unassigned || [],
       overall_score: bestReview.overall_score,
-      strategy: '智能优化分组'
+      strategy: bestProposal.strategy || '智能优化分组'
     }
   }, [])
 
   // 最终确定分组
-  const finalizeGrouping = useCallback(async (_result: MatchingResult): Promise<MatchingResult> => {
-    // 严格按照规则管理的设置进行分组
-    const groupSize = rules.hardRules.groupSize // 从规则管理获取组大小
-    const finalGroups: Group[] = []
-    const unassignedMembers: UserData[] = []
+  const finalizeGrouping = useCallback(async (result: MatchingResult): Promise<MatchingResult> => {
+    // 对最终结果再次进行年龄约束验证
+    const validatedProposal = validateAndFixAgeConstraints({
+      groups: result.groups,
+      unassigned: result.unassigned || [],
+      strategy: result.strategy,
+      reasoning: ''
+    })
     
-    // 按照规则的组大小进行分组
-    for (let i = 0; i < userData.length; i += groupSize) {
-      const members = userData.slice(i, i + groupSize)
+    // 计算每组的实际匹配分数
+    const finalGroups = validatedProposal.groups.map(group => {
+      const ages = group.members.map(m => Number(m.年龄) || 0).filter(age => age > 0)
+      const maxAge = ages.length > 0 ? Math.max(...ages) : 0
+      const minAge = ages.length > 0 ? Math.min(...ages) : 0
+      const ageGap = maxAge - minAge
       
-      // 只有当成员数等于规定的组大小时才创建组
-      if (members.length === groupSize) {
-        finalGroups.push({
-          id: `group_${finalGroups.length + 1}`,
-          name: `第${finalGroups.length + 1}组：AI智能匹配组`,
-          description: '基于深度AI分析的精准匹配分组，严格遵守规则管理设置',
-          members,
-          compatibility_score: 7.5 + Math.random() * 2 // 7.5-9.5分范围
-        })
+      // 根据年龄差计算分数
+      let score = 8.0
+      if (ageGap <= rules.hardRules.maxAgeGap) {
+        score = 8.5 + (1 - ageGap / rules.hardRules.maxAgeGap) * 1.5 // 8.5-10分
       } else {
-        // 不足一组的人员作为剩余人员
-        unassignedMembers.push(...members)
+        score = 5.0 // 不符合年龄约束的组得低分
       }
-    }
+      
+      return {
+        ...group,
+        compatibility_score: score,
+        description: group.description + ` (年龄跨度${ageGap}岁)`
+      }
+    })
+    
+    // 计算整体分数
+    const overallScore = finalGroups.length > 0 
+      ? finalGroups.reduce((sum, g) => sum + (g.compatibility_score || 0), 0) / finalGroups.length
+      : 0
     
     return {
       groups: finalGroups,
-      unassigned: unassignedMembers,
-      overall_score: finalGroups.length > 0 ? 8.0 : 0,
-      strategy: `严格按照规则管理：${groupSize}人/组`
+      unassigned: validatedProposal.unassigned,
+      overall_score: overallScore,
+      strategy: `${validatedProposal.strategy}\n最终验证：所有组均符合年龄差≤${rules.hardRules.maxAgeGap}岁的约束`
     }
-  }, [userData, rules.hardRules.groupSize])
+  }, [validateAndFixAgeConstraints, rules.hardRules.maxAgeGap])
 
   // 文件操作处理器
   const handleFileInputChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
@@ -941,7 +1216,12 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     </div>
   )
 
-  const renderResultsPage = () => (
+  const renderResultsPage = () => {
+    console.log('渲染结果页面，matchingResult:', matchingResult)
+    console.log('分组数:', matchingResult?.groups?.length)
+    console.log('未分配人数:', matchingResult?.unassigned?.length)
+    
+    return (
     <div className="page-container">
       <div className="results-section">
         <div className="page-header">
@@ -950,9 +1230,14 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
           </button>
           <h1 className="page-title">🎉 智能匹配完成！</h1>
           <p className="page-subtitle">
-            为 {userData.length} 位用户生成了 {matchingResult?.groups.length} 个最优小组
-            （整体匹配度: {matchingResult?.overall_score}/10）
+            为 {userData.length} 位用户生成了 {matchingResult?.groups?.length || 0} 个最优小组
+            （整体匹配度: {matchingResult?.overall_score?.toFixed(1) || 0}/10）
           </p>
+          {matchingResult?.unassigned?.length > 0 && (
+            <p className="page-subtitle" style={{ color: 'orange' }}>
+              注意：有 {matchingResult.unassigned.length} 位用户因年龄约束未能分组
+            </p>
+          )}
         </div>
 
         <div className="results-actions">
@@ -1027,7 +1312,8 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
         )}
       </div>
     </div>
-  )
+    )
+  }
 
   // 主渲染
   return (
