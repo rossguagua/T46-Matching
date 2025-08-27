@@ -452,42 +452,84 @@ const GroupAdjuster: React.FC<GroupAdjusterProps> = ({
                       {filtered.length === 0 && group.members.length > 0 && (
                         <div className="no-match-placeholder">没有匹配的用户</div>
                       )}
-                      {filtered.map((member, index) => {
-                        const userId = `${group.id}-${member.姓名}`
-                        const isSelected = selectedUsers.has(userId)
+                      {(() => {
+                        if (filtered.length === 0) return null
+                        
+                        // 按性别分组
+                        const maleMembers = filtered.filter(m => m.性别 === '男' || m.性别 === '男性')
+                        const femaleMembers = filtered.filter(m => m.性别 === '女' || m.性别 === '女性')
+                        const otherMembers = filtered.filter(m => m.性别 !== '男' && m.性别 !== '男性' && m.性别 !== '女' && m.性别 !== '女性')
+                        
+                        const renderMember = (member: any, index: number) => {
+                          const userId = `${group.id}-${member.姓名}`
+                          const isSelected = selectedUsers.has(userId)
+                          
+                          return (
+                            <div
+                              key={index}
+                              className={`member-card ${isSelected ? 'selected' : ''}`}
+                              draggable
+                              onDragStart={(e) => handleDragStart(e, member, group.id, index)}
+                              onClick={(e) => {
+                                // 只在批量选择模式或按住shift时处理选择
+                                if (isMultiSelectMode || e.shiftKey) {
+                                  handleUserSelect(userId, e)
+                                }
+                              }}
+                            >
+                              <span className="member-name">{member.姓名 || '未知'}</span>
+                              <span className="member-info">{member.年龄}岁 {member.性别}</span>
+                              {(member.开放程度 || member.能量指数) && (
+                                <div className="member-traits">
+                                  {member.开放程度 && (
+                                    <span className="trait openness" title="开放程度">
+                                      🌟 {member.开放程度}
+                                    </span>
+                                  )}
+                                  {member.能量指数 && (
+                                    <span className="trait energy" title="能量指数">
+                                      ⚡ {member.能量指数}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        }
                         
                         return (
-                          <div
-                            key={index}
-                            className={`member-card ${isSelected ? 'selected' : ''}`}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, member, group.id, index)}
-                            onClick={(e) => {
-                              // 只在批量选择模式或按住shift时处理选择
-                              if (isMultiSelectMode || e.shiftKey) {
-                                handleUserSelect(userId, e)
-                              }
-                            }}
-                          >
-                            <span className="member-name">{member.姓名 || '未知'}</span>
-                            <span className="member-info">{member.年龄}岁 {member.性别}</span>
-                            {(member.开放程度 || member.能量指数) && (
-                              <div className="member-traits">
-                                {member.开放程度 && (
-                                  <span className="trait openness" title="开放程度">
-                                    🌟 {member.开放程度}
-                                  </span>
-                                )}
-                                {member.能量指数 && (
-                                  <span className="trait energy" title="能量指数">
-                                    ⚡ {member.能量指数}
-                                  </span>
-                                )}
+                          <>
+                            {/* 男性成员 */}
+                            {maleMembers.length > 0 && (
+                              <div className="gender-section">
+                                <div className="gender-label male-label">♂ 男生 ({maleMembers.length})</div>
+                                {maleMembers.map((member, idx) => renderMember(member, idx))}
                               </div>
                             )}
-                          </div>
+                            
+                            {/* 性别分隔线 */}
+                            {maleMembers.length > 0 && femaleMembers.length > 0 && (
+                              <div className="gender-divider"></div>
+                            )}
+                            
+                            {/* 女性成员 */}
+                            {femaleMembers.length > 0 && (
+                              <div className="gender-section">
+                                <div className="gender-label female-label">♀ 女生 ({femaleMembers.length})</div>
+                                {femaleMembers.map((member, idx) => renderMember(member, idx))}
+                              </div>
+                            )}
+                            
+                            {/* 其他性别成员 */}
+                            {otherMembers.length > 0 && (
+                              <div className="gender-section">
+                                <div className="gender-label other-label">其他 ({otherMembers.length})</div>
+                                {otherMembers.map((member, idx) => renderMember(member, idx))}
+                              </div>
+                            )}
+                          </>
                         )
-                      })}
+                      })()}
                     </div>
 
                     {selectedUsers.size > 0 && (
@@ -619,3 +661,76 @@ const GroupAdjuster: React.FC<GroupAdjusterProps> = ({
 }
 
 export default GroupAdjuster
+
+// 添加性别分隔线样式
+const genderStyles = `
+.gender-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gender-label {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 3px;
+  text-align: center;
+  margin: 2px 0;
+  letter-spacing: 0.3px;
+}
+
+.male-label {
+  background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+  color: #1565C0;
+  border: 1px solid #42A5F5;
+}
+
+.female-label {
+  background: linear-gradient(135deg, #FCE4EC, #F8BBD9);
+  color: #C2185B;
+  border: 1px solid #E91E63;
+}
+
+.other-label {
+  background: linear-gradient(135deg, #F3E5F5, #E1BEE7);
+  color: #7B1FA2;
+  border: 1px solid #9C27B0;
+}
+
+.gender-divider {
+  height: 2px;
+  background: linear-gradient(90deg, #E3F2FD 0%, #FCE4EC 100%);
+  margin: 6px 0;
+  border-radius: 1px;
+  position: relative;
+  overflow: hidden;
+}
+
+.gender-divider::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(102,126,234,0.6) 50%, transparent 100%);
+  animation: shimmer-adjuster 2s infinite;
+}
+
+@keyframes shimmer-adjuster {
+  0% { left: -100%; }
+  100% { left: 100%; }
+}
+`
+
+// 将样式添加到document
+if (typeof document !== 'undefined') {
+  const existingStyle = document.getElementById('gender-separator-styles')
+  if (!existingStyle) {
+    const styleElement = document.createElement('style')
+    styleElement.id = 'gender-separator-styles'
+    styleElement.textContent = genderStyles
+    document.head.appendChild(styleElement)
+  }
+}

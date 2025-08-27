@@ -212,41 +212,81 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
               </div>
             </div>
             <div className="group-members">
-              {group.members.length > 0 ? group.members.map((member, idx) => (
-                <div
-                  key={`${group.id}_${idx}_${member.自选昵称 || member.name || idx}`}
-                  className={`member-card draggable ${
-                    dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' 
-                      ? 'swap-target' 
-                      : ''
-                  }`}
-                  draggable
-                  onDragStart={(e) => handleDragStart(e, member, group.id)}
-                  onDragOver={handleDragOver}
-                  onDragEnter={() => {
-                    if (dragState.draggedFromGroup === 'unassigned' && member.自选昵称) {
-                      handleDragEnterMember(member.自选昵称)
-                    }
-                  }}
-                  onDragLeave={handleDragLeaveMember}
-                  onDrop={(e) => {
-                    if (dragState.draggedFromGroup === 'unassigned') {
-                      handleDropOnMember(e, member, group.id)
-                    }
-                  }}
-                >
-                  <div className="member-name">{member.自选昵称}</div>
-                  <div className="member-info">
-                    {member.年龄}岁 · {member.性别} · {member.职业}
-                    {(member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度) && (
-                      <span> · 开放度: {member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度}</span>
+              {group.members.length > 0 ? (() => {
+                // 按性别分组
+                const maleMembers = group.members.filter(m => m.性别 === '男' || m.性别 === '男性')
+                const femaleMembers = group.members.filter(m => m.性别 === '女' || m.性别 === '女性')
+                const otherMembers = group.members.filter(m => m.性别 !== '男' && m.性别 !== '男性' && m.性别 !== '女' && m.性别 !== '女性')
+                
+                const renderMember = (member: any, idx: number) => (
+                  <div
+                    key={`${group.id}_${idx}_${member.自选昵称 || member.name || idx}`}
+                    className={`member-card draggable ${
+                      dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' 
+                        ? 'swap-target' 
+                        : ''
+                    }`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, member, group.id)}
+                    onDragOver={handleDragOver}
+                    onDragEnter={() => {
+                      if (dragState.draggedFromGroup === 'unassigned' && member.自选昵称) {
+                        handleDragEnterMember(member.自选昵称)
+                      }
+                    }}
+                    onDragLeave={handleDragLeaveMember}
+                    onDrop={(e) => {
+                      if (dragState.draggedFromGroup === 'unassigned') {
+                        handleDropOnMember(e, member, group.id)
+                      }
+                    }}
+                  >
+                    <div className="member-name">{member.自选昵称}</div>
+                    <div className="member-info">
+                      {member.年龄}岁 · {member.性别} · {member.职业}
+                      {(member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度) && (
+                        <span> · 开放度: {member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度}</span>
+                      )}
+                    </div>
+                    {dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' && (
+                      <div className="swap-indicator">⇄ 互换</div>
                     )}
                   </div>
-                  {dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' && (
-                    <div className="swap-indicator">⇄ 互换</div>
-                  )}
-                </div>
-              )) : (
+                )
+                
+                return (
+                  <>
+                    {/* 男性成员 */}
+                    {maleMembers.length > 0 && (
+                      <div className="gender-section">
+                        <div className="gender-label male-label">♂ 男生 ({maleMembers.length})</div>
+                        {maleMembers.map((member, idx) => renderMember(member, idx))}
+                      </div>
+                    )}
+                    
+                    {/* 性别分隔线 */}
+                    {maleMembers.length > 0 && femaleMembers.length > 0 && (
+                      <div className="gender-divider"></div>
+                    )}
+                    
+                    {/* 女性成员 */}
+                    {femaleMembers.length > 0 && (
+                      <div className="gender-section">
+                        <div className="gender-label female-label">♀ 女生 ({femaleMembers.length})</div>
+                        {femaleMembers.map((member, idx) => renderMember(member, idx))}
+                      </div>
+                    )}
+                    
+                    {/* 其他性别成员 */}
+                    {otherMembers.length > 0 && (
+                      <div className="gender-section">
+                        <div className="gender-label other-label">其他 ({otherMembers.length})</div>
+                        {otherMembers.map((member, idx) => renderMember(member, idx))}
+                      </div>
+                    )}
+                  </>
+                )
+              })() : (
                 <div className="empty-group-placeholder">
                   拖拽成员到此处添加
                 </div>
@@ -402,6 +442,65 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
           display: flex;
           flex-direction: column;
           gap: 8px;
+        }
+
+        .gender-section {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+
+        .gender-label {
+          font-size: 12px;
+          font-weight: 700;
+          padding: 4px 8px;
+          border-radius: 4px;
+          text-align: center;
+          margin: 2px 0;
+          letter-spacing: 0.5px;
+        }
+
+        .male-label {
+          background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
+          color: #1565C0;
+          border: 1px solid #42A5F5;
+        }
+
+        .female-label {
+          background: linear-gradient(135deg, #FCE4EC, #F8BBD9);
+          color: #C2185B;
+          border: 1px solid #E91E63;
+        }
+
+        .other-label {
+          background: linear-gradient(135deg, #F3E5F5, #E1BEE7);
+          color: #7B1FA2;
+          border: 1px solid #9C27B0;
+        }
+
+        .gender-divider {
+          height: 2px;
+          background: linear-gradient(90deg, #E3F2FD 0%, #FCE4EC 100%);
+          margin: 8px 0;
+          border-radius: 1px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .gender-divider::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: -100%;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(90deg, transparent 0%, rgba(102,126,234,0.6) 50%, transparent 100%);
+          animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+          0% { left: -100%; }
+          100% { left: 100%; }
         }
 
         .member-card.draggable {
