@@ -36,7 +36,8 @@
       "Bash(grep:*)",
       "Bash(del nul)",
       "Bash(rm:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": []

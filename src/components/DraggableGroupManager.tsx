@@ -1,9 +1,11 @@
 import React, { useState, useCallback } from 'react'
-import { MatchingResult, MatchingGroup } from '../types/matching'
+import { MatchingResult } from '../types/matching'
 
 interface DraggableGroupManagerProps {
   result: MatchingResult
   onGroupsChange: (newResult: MatchingResult) => void
+  onDeleteGroup?: (groupId: string) => void
+  onCreateGroup?: () => void
 }
 
 interface DragState {
@@ -45,16 +47,26 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
   }, [])
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-  }, [])
+    // 只阻止拖放默认行为，不阻止滚轮
+    if (e.dataTransfer.types.includes('text/plain') || dragState.isDragging) {
+      e.preventDefault()
+      e.dataTransfer.dropEffect = 'move'
+    }
+  }, [dragState.isDragging])
 
   const handleDragEnter = useCallback((groupId: string | 'unassigned') => {
     setDragState(prev => ({ ...prev, draggedOverGroup: groupId }))
   }, [])
 
-  const handleDragLeave = useCallback(() => {
-    setDragState(prev => ({ ...prev, draggedOverGroup: null, draggedOverMemberName: null }))
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // 检查是否真正离开了组容器，而不是进入了子元素
+    const currentTarget = e.currentTarget as HTMLElement
+    const relatedTarget = e.relatedTarget as HTMLElement
+    
+    if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+      // 真正离开组容器
+      setDragState(prev => ({ ...prev, draggedOverGroup: null, draggedOverMemberName: null }))
+    }
   }, [])
 
   const handleDragEnterMember = useCallback((memberName: string) => {
@@ -116,32 +128,48 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
       return
     }
 
+    console.log('拖拽操作:', {
+      from: dragState.draggedFromGroup,
+      to: targetGroupId,
+      member: dragState.draggedMember.自选昵称,
+      总人数前: result.groups.reduce((sum, g) => sum + g.members.length, 0) + (result.unassigned?.length || 0)
+    })
+
     const newGroups = [...result.groups]
     let newUnassigned = [...(result.unassigned || [])]
 
-    // 从源组移除成员
+    // 从源组移除成员 - 使用昵称进行精确匹配
     if (dragState.draggedFromGroup === 'unassigned') {
+      const beforeCount = newUnassigned.length
       newUnassigned = newUnassigned.filter(m => 
         m.自选昵称 !== dragState.draggedMember.自选昵称
       )
+      console.log('从未分配移除:', beforeCount, '->', newUnassigned.length)
     } else {
       const sourceGroup = newGroups.find(g => g.id === dragState.draggedFromGroup)
       if (sourceGroup) {
+        const beforeCount = sourceGroup.members.length
         sourceGroup.members = sourceGroup.members.filter(m => 
           m.自选昵称 !== dragState.draggedMember.自选昵称
         )
+        console.log(`从${sourceGroup.name}移除:`, beforeCount, '->', sourceGroup.members.length)
       }
     }
 
     // 添加到目标组
     if (targetGroupId === 'unassigned') {
       newUnassigned.push(dragState.draggedMember)
+      console.log('添加到未分配:', newUnassigned.length)
     } else {
       const targetGroup = newGroups.find(g => g.id === targetGroupId)
       if (targetGroup) {
         targetGroup.members.push(dragState.draggedMember)
+        console.log(`添加到${targetGroup.name}:`, targetGroup.members.length)
       }
     }
+
+    const totalAfter = newGroups.reduce((sum, g) => sum + g.members.length, 0) + newUnassigned.length
+    console.log('总人数后:', totalAfter)
 
     // 更新结果
     onGroupsChange({
@@ -168,7 +196,8 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
             onDrop={(e) => handleDrop(e, group.id)}
           >
             <div className="group-header">
-              <h3 className="group-title">{group.name}</h3>
+              <h3 className="group-title">第{group.id.replace('group_', '')}组</h3>
+              {/* 删除组功能暂时移除 */}
               <div className="group-stats">
                 <span className="member-count">{group.members.length}人</span>
                 {(() => {
@@ -180,16 +209,12 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
                     </span>
                   )
                 })()}
-                <span className="group-score">
-                  匹配度: {group.compatibility_score?.toFixed(2) || '0.00'}
-                </span>
               </div>
             </div>
-            <div className="group-description">{group.description}</div>
             <div className="group-members">
-              {group.members.map((member, idx) => (
+              {group.members.length > 0 ? group.members.map((member, idx) => (
                 <div
-                  key={idx}
+                  key={`${group.id}_${idx}_${member.自选昵称 || member.name || idx}`}
                   className={`member-card draggable ${
                     dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' 
                       ? 'swap-target' 
@@ -199,7 +224,7 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
                   onDragStart={(e) => handleDragStart(e, member, group.id)}
                   onDragOver={handleDragOver}
                   onDragEnter={() => {
-                    if (dragState.draggedFromGroup === 'unassigned') {
+                    if (dragState.draggedFromGroup === 'unassigned' && member.自选昵称) {
                       handleDragEnterMember(member.自选昵称)
                     }
                   }}
@@ -213,54 +238,70 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
                   <div className="member-name">{member.自选昵称}</div>
                   <div className="member-info">
                     {member.年龄}岁 · {member.性别} · {member.职业}
+                    {(member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度) && (
+                      <span> · 开放度: {member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度}</span>
+                    )}
                   </div>
                   {dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' && (
                     <div className="swap-indicator">⇄ 互换</div>
                   )}
                 </div>
-              ))}
+              )) : (
+                <div className="empty-group-placeholder">
+                  拖拽成员到此处添加
+                </div>
+              )}
             </div>
           </div>
         ))}
       </div>
 
-      {result.unassigned && result.unassigned.length > 0 && (
-        <div 
-          className={`unassigned-section draggable ${
-            dragState.draggedOverGroup === 'unassigned' ? 'drag-over' : ''
-          }`}
-          onDragOver={handleDragOver}
-          onDragEnter={() => handleDragEnter('unassigned')}
-          onDragLeave={handleDragLeave}
-          onDrop={(e) => handleDrop(e, 'unassigned')}
-        >
-          <h3>待分组用户 ({result.unassigned.length}人)</h3>
-          <div className="unassigned-members">
-            {result.unassigned.map((member, idx) => (
-              <div
-                key={idx}
-                className={`member-card draggable ${
-                  dragState.isDragging && dragState.draggedMember === member 
-                    ? 'dragging' 
-                    : ''
-                }`}
-                draggable
-                onDragStart={(e) => handleDragStart(e, member, 'unassigned')}
-              >
-                <div className="member-name">{member.自选昵称}</div>
-                <div className="member-info">
-                  {member.年龄}岁 · {member.性别} · {member.职业}
-                </div>
-                {dragState.isDragging && dragState.draggedMember === member && (
-                  <div className="drag-hint">拖到组内成员上可互换</div>
+      {/* 始终显示未分配区域，即使没有人 */}
+      <div 
+        className={`unassigned-section draggable ${
+          dragState.draggedOverGroup === 'unassigned' ? 'drag-over' : ''
+        }`}
+        onDragOver={handleDragOver}
+        onDragEnter={() => handleDragEnter('unassigned')}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, 'unassigned')}
+      >
+        <div className="unassigned-header">
+          <h3>待分组用户 ({result.unassigned?.length || 0}人)</h3>
+        </div>
+        <div className="unassigned-members">
+          {result.unassigned && result.unassigned.length > 0 ? result.unassigned.map((member, idx) => (
+            <div
+              key={`unassigned_${member.自选昵称 || member.name || idx}`}
+              className={`member-card draggable ${
+                dragState.isDragging && dragState.draggedMember === member 
+                  ? 'dragging' 
+                  : ''
+              }`}
+              draggable
+              onDragStart={(e) => handleDragStart(e, member, 'unassigned')}
+              style={{ 
+                touchAction: 'none' // 允许拖拽但保持滚动
+              }}
+            >
+              <div className="member-name">{member.自选昵称}</div>
+              <div className="member-info">
+                {member.年龄}岁 · {member.性别} · {member.职业}
+                {(member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度) && (
+                  <span> · 开放度: {member['对于现场话题和游戏的开放程度，你的接受度'] || member.开放度}</span>
                 )}
               </div>
-            ))}
-          </div>
+              {dragState.isDragging && dragState.draggedMember === member && (
+                <div className="drag-hint">拖到组内成员上可互换</div>
+              )}
+            </div>
+          )) : (
+            <div className="no-unassigned">暂无待分配用户</div>
+          )}
         </div>
-      )}
+      </div>
 
-      <style jsx>{`
+      <style>{`
         .draggable-groups-container {
           padding: 20px;
         }
@@ -282,9 +323,10 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
         }
 
         .group-card.draggable.drag-over {
-          border-color: #667eea;
-          background: linear-gradient(135deg, rgba(102,126,234,0.05) 0%, rgba(118,75,162,0.05) 100%);
-          transform: scale(1.02);
+          border: 3px solid #667eea !important;
+          background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%) !important;
+          transform: scale(1.05) !important;
+          box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4) !important;
         }
 
         .group-header {
@@ -366,10 +408,12 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
           background: #f8f9fa;
           padding: 10px;
           border-radius: 8px;
-          cursor: move;
+          cursor: grab;
           transition: all 0.2s ease;
           border: 1px solid #e0e0e0;
           position: relative;
+          user-select: none;
+          touch-action: pan-y;
         }
 
         .member-card.draggable:hover {
@@ -448,11 +492,14 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
           padding: 20px;
           border: 2px dashed #ddd;
           transition: all 0.3s ease;
+          position: relative;
         }
 
         .unassigned-section.draggable.drag-over {
-          border-color: #667eea;
-          background: white;
+          border: 3px solid #667eea !important;
+          background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%) !important;
+          transform: scale(1.02) !important;
+          box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3) !important;
         }
 
         .unassigned-section h3 {
@@ -465,6 +512,26 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
           display: grid;
           grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
           gap: 10px;
+          max-height: 200px;
+          overflow-y: auto;
+          overflow-x: hidden;
+          padding-right: 10px;
+          scroll-behavior: smooth;
+          touch-action: pan-y;
+        }
+        
+        .unassigned-members::-webkit-scrollbar {
+          width: 6px;
+        }
+        
+        .unassigned-members::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 3px;
+        }
+        
+        .unassigned-members::-webkit-scrollbar-thumb {
+          background: #667eea;
+          border-radius: 3px;
         }
       `}</style>
     </div>

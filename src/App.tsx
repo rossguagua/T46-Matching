@@ -4,8 +4,8 @@ import MatchingFlow from './components/MatchingFlow'
 import RulesManagement from './components/RulesManagement'
 import LLMManagement from './components/LLMManagement'
 import SystemSettings from './components/SystemSettings'
-import DraggableApiMonitor from './components/DraggableApiMonitor'
-import { useApiConfig } from './hooks/useApiConfig'
+// import DraggableApiMonitor from './components/DraggableApiMonitor'
+// import { useApiConfig } from './hooks/useApiConfig'
 
 // 原有的API监控接口定义
 interface ApiCall {
@@ -40,9 +40,11 @@ function App() {
     preserveState: boolean
     lastCompletedStep?: string
     hasResults: boolean
+    forceReset?: boolean
   }>({
     preserveState: true, // 默认启用状态保持
-    hasResults: false
+    hasResults: false,
+    forceReset: false
   })
   
   // API监控状态（保持原有逻辑）
@@ -53,9 +55,7 @@ function App() {
     errorCount: 0,
     isOnline: true
   })
-  const [showApiDetails, setShowApiDetails] = useState(false)
-
-  const { isConfigValid, config } = useApiConfig()
+  // const { isConfigValid } = useApiConfig()
 
   // 处理匹配状态更新的回调
   const handleMatchingStateChange = useCallback((state: {
@@ -66,12 +66,19 @@ function App() {
     setMatchingState(prev => ({ ...prev, ...state }))
   }, [])
 
-  // 重置匹配状态
+  // 重置匹配状态 - 只有点击返回按钮时调用
   const handleResetMatching = useCallback(() => {
+    // 清除localStorage中的状态
+    localStorage.removeItem('t46-matching-state')
     setMatchingState({
       preserveState: false,
-      hasResults: false
+      hasResults: false,
+      forceReset: true
     })
+    // 稍后重新启用状态保持
+    setTimeout(() => {
+      setMatchingState(prev => ({ ...prev, preserveState: true, forceReset: false }))
+    }, 100)
   }, [])
 
   // API监控工具函数（保持原有逻辑）
@@ -117,18 +124,18 @@ function App() {
     }))
   }, [])
 
-  const resetApiMonitor = useCallback(() => {
-    setApiMonitor(prev => ({
-      ...prev,
-      calls: [],
-      totalCalls: 0,
-      errorCount: 0,
-      quotaStatus: Object.keys(prev.quotaStatus).reduce((acc, model) => ({
-        ...acc,
-        [model]: { ...prev.quotaStatus[model], used: 0 }
-      }), {})
-    }))
-  }, [])
+  // const resetApiMonitor = useCallback(() => {
+  //   setApiMonitor(prev => ({
+  //     ...prev,
+  //     calls: [],
+  //     totalCalls: 0,
+  //     errorCount: 0,
+  //     quotaStatus: Object.keys(prev.quotaStatus).reduce((acc, model) => ({
+  //       ...acc,
+  //       [model]: { ...prev.quotaStatus[model], used: 0 }
+  //     }), {})
+  //   }))
+  // }, [])
 
   // API调用处理函数
   const handleApiCall = useCallback((model: string, operation: string, status: 'success' | 'error', duration?: number, provider?: string) => {
@@ -140,139 +147,7 @@ function App() {
     })
   }, [trackApiCall, updateApiCall])
 
-  // 渲染API监控组件
-  const renderApiMonitor = () => (
-    <DraggableApiMonitor
-      calls={apiMonitor.calls}
-      quotaStatus={apiMonitor.quotaStatus}
-      totalCalls={apiMonitor.totalCalls}
-      errorCount={apiMonitor.errorCount}
-      isOnline={apiMonitor.isOnline}
-      onReset={resetApiMonitor}
-    />
-  )
-
   // 渲染旧版API监控组件（备用）
-  const renderApiMonitorOld = () => {
-    const getStatusColor = () => {
-      if (apiMonitor.errorCount > 0) return '#ff4444'
-      if (Object.values(apiMonitor.quotaStatus).some(q => q.used / q.limit > 0.8)) return '#ff9500'
-      return '#00c851'
-    }
-
-    const getStatusIcon = () => {
-      if (apiMonitor.errorCount > 0) return '🔴'
-      if (Object.values(apiMonitor.quotaStatus).some(q => q.used / q.limit > 0.8)) return '🟡'
-      return '🟢'
-    }
-
-    const recentErrors = apiMonitor.calls.filter(call => call.status === 'error').slice(-3)
-    const pendingCalls = apiMonitor.calls.filter(call => call.status === 'pending').slice(-3)
-
-    return (
-      <div className="api-monitor">
-        <div 
-          className="api-monitor-compact"
-          onClick={() => setShowApiDetails(!showApiDetails)}
-          style={{ borderColor: getStatusColor() }}
-        >
-          <div className="api-status">
-            <span className="status-icon">{getStatusIcon()}</span>
-            <span className="status-text">API {apiMonitor.isOnline ? 'Online' : 'Offline'}</span>
-          </div>
-          <div className="api-stats">
-            <span>调用: {apiMonitor.totalCalls}</span>
-            {pendingCalls.length > 0 && <span className="pending-count">进行中: {pendingCalls.length}</span>}
-            {apiMonitor.errorCount > 0 && <span className="error-count">错误: {apiMonitor.errorCount}</span>}
-          </div>
-        </div>
-
-        {showApiDetails && (
-          <div className="api-monitor-details">
-            <div className="api-details-header">
-              <h4>API监控详情</h4>
-              <button onClick={() => resetApiMonitor()} className="reset-button">
-                🔄 重置统计
-              </button>
-            </div>
-
-            <div className="quota-section">
-              <h5>配额使用情况</h5>
-              {Object.entries(apiMonitor.quotaStatus).map(([model, quota]) => (
-                <div key={model} className="quota-item">
-                  <div className="quota-model">{model}</div>
-                  <div className="quota-bar">
-                    <div 
-                      className="quota-fill" 
-                      style={{ 
-                        width: `${(quota.used / quota.limit) * 100}%`,
-                        backgroundColor: quota.used / quota.limit > 0.8 ? '#ff4444' : '#00c851'
-                      }}
-                    ></div>
-                  </div>
-                  <div className="quota-text">{quota.used}/{quota.limit}</div>
-                </div>
-              ))}
-            </div>
-
-            {pendingCalls.length > 0 && (
-              <div className="pending-calls-section">
-                <h5>正在调用中 ({pendingCalls.length})</h5>
-                {pendingCalls.map(call => (
-                  <div key={call.id} className="pending-call-item">
-                    <div className="call-time">
-                      {new Date(call.timestamp).toLocaleTimeString()}
-                    </div>
-                    <div className="call-provider">{call.provider || '未知'}</div>
-                    <div className="call-model">{call.model}</div>
-                    <div className="call-operation">{call.operation}</div>
-                    <div className="call-status">⏳</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {recentErrors.length > 0 && (
-              <div className="errors-section">
-                <h5>最近错误 ({recentErrors.length})</h5>
-                {recentErrors.map(call => (
-                  <div key={call.id} className="error-item">
-                    <div className="error-time">
-                      {new Date(call.timestamp).toLocaleTimeString()}
-                    </div>
-                    <div className="error-model">{call.model}</div>
-                    <div className="error-operation">{call.operation}</div>
-                    <div className="error-message">{call.error}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="recent-calls-section">
-              <h5>最近调用 ({apiMonitor.calls.slice(-5).length})</h5>
-              {apiMonitor.calls.slice(-5).reverse().map(call => (
-                <div key={call.id} className={`call-item ${call.status}`}>
-                  <div className="call-time">
-                    {new Date(call.timestamp).toLocaleTimeString()}
-                  </div>
-                  <div className="call-model">{call.model}</div>
-                  <div className="call-operation">{call.operation}</div>
-                  <div className="call-status">
-                    {call.status === 'pending' && '⏳'}
-                    {call.status === 'success' && '✅'}
-                    {call.status === 'error' && '❌'}
-                  </div>
-                  {call.duration && (
-                    <div className="call-duration">{call.duration}ms</div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
 
   // 渲染当前页面内容
   const renderPageContent = () => {
@@ -284,6 +159,7 @@ function App() {
             preserveState={matchingState.preserveState}
             onStateChange={handleMatchingStateChange}
             onResetState={handleResetMatching}
+            forceReset={matchingState.forceReset}
           />
         )
       case 'rules-management':
@@ -434,15 +310,14 @@ function App() {
           totalCalls: apiMonitor.totalCalls,
           errorCount: apiMonitor.errorCount
         }}
+        apiCalls={apiMonitor.calls}
+        quotaStatus={apiMonitor.quotaStatus}
         matchingState={matchingState}
         onResetMatching={handleResetMatching}
       />
       <main className="main-content">
         {renderPageContent()}
       </main>
-      <div className="api-monitor-wrapper">
-        {renderApiMonitor()}
-      </div>
     </div>
   )
 }

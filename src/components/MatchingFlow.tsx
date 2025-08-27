@@ -93,9 +93,10 @@ interface MatchingFlowProps {
   preserveState?: boolean
   onStateChange?: (state: { preserveState?: boolean; hasResults?: boolean; lastCompletedStep?: string }) => void
   onResetState?: () => void
+  forceReset?: boolean
 }
 
-const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, onStateChange, onResetState }) => {
+const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, onStateChange, onResetState, forceReset }) => {
   const { getActiveProviderConfig, isConfigValid } = useApiConfig()
   const { rules, generateGroupingPrompt, generateEvaluationPrompt, generateUserAnalysisPrompt } = useMatchingRules()
   
@@ -118,7 +119,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
   ])
   const [errors, setErrors] = useState<string[]>([])
   const [isDragOver, setIsDragOver] = useState(false)
-  const [isDragMode, setIsDragMode] = useState(false)
+  // 移除编辑模式概念，分组结果默认可编辑
 
   const llmAdapter = new LLMAdapter()
 
@@ -172,10 +173,27 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
 
   // 组件挂载时加载状态
   useEffect(() => {
-    if (preserveState) {
+    if (preserveState && !forceReset) {
       loadState()
+    } else if (forceReset) {
+      // 强制重置时清空所有状态
+      setAppState('upload')
+      setUserData([])
+      setRawData([])
+      setShowDataEditor(false)
+      setDataSummary(null)
+      setMatchingResult(null)
+      setMatchingProgress([
+        { step: 1, stepName: 'AI问卷深度分析', status: 'pending', details: '准备分析用户问卷...', progress: 0 },
+        { step: 2, stepName: '用户档案标准化', status: 'pending', details: '准备标准化档案...', progress: 0 },
+        { step: 3, stepName: 'MatchingAgent生成方案', status: 'pending', details: '准备生成初始分组方案...', progress: 0 },
+        { step: 4, stepName: 'ReviewAgent严格审批', status: 'pending', details: '准备评估分组质量...', progress: 0 },
+        { step: 5, stepName: '智能优化循环', status: 'pending', details: '准备迭代优化分组...', progress: 0 },
+        { step: 6, stepName: '最终确认输出', status: 'pending', details: '准备生成最终结果...', progress: 0 },
+      ])
+      setErrors([])
     }
-  }, [preserveState, loadState])
+  }, [preserveState, forceReset, loadState])
 
   // 自动保存状态
   useEffect(() => {
@@ -466,6 +484,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
 
   // 执行用户分析（并行处理）
   const performUserAnalysis = useCallback(async (users: UserData[]): Promise<UserProfile[]> => {
+    console.log('开始用户分析，用户数量:', users.length)
     const profiles: UserProfile[] = []
     const batchSize = 5 // 每批并行处理5个用户
     
@@ -483,7 +502,9 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
         const analysisPrompt = generateUserAnalysisPrompt(user)
 
         try {
+          console.log(`开始分析用户 ${userIndex+1}:`, user.自选昵称 || user.姓名)
           const result = await callLLM(analysisPrompt, 'analysis', `用户分析-${userIndex+1}`)
+          console.log(`用户 ${userIndex+1} 分析完成，结果长度:`, result.length)
           // 更严格的JSON清理
           let cleanedResult = result.replace(/```json\s*|\s*```/g, '').trim()
           // 移除可能的尾部逗号
@@ -551,6 +572,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     
     // 先收集所有需要重新分配的成员
     let membersToReassign: UserData[] = []
+    const usedMemberNames = new Set<string>() // 防止成员重复
     
     // 检查每个组的年龄约束
     proposal.groups.forEach(group => {
@@ -560,6 +582,8 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
       if (ages.length === 0) {
         // 如果没有年龄信息，保持原组
         fixedGroups.push(group)
+        // 记录已使用的成员
+        members.forEach(m => usedMemberNames.add(m.自选昵称))
         return
       }
       
@@ -570,17 +594,25 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
       if (ageGap <= maxAgeGap && members.length === groupSize) {
         // 年龄差符合要求且人数正确，保持原组
         fixedGroups.push(group)
+        // 记录已使用的成员
+        members.forEach(m => usedMemberNames.add(m.自选昵称))
       } else {
-        // 需要重新分配
+        // 需要重新分配，但要去重
         console.warn(`组 ${group.name} 年龄差为 ${ageGap} 岁或人数不对，需要重新分配`)
-        membersToReassign.push(...members)
+        members.forEach(member => {
+          if (!usedMemberNames.has(member.自选昵称)) {
+            membersToReassign.push(member)
+            usedMemberNames.add(member.自选昵称)
+          }
+        })
       }
     })
     
     // 如果有成员需要重新分配
     if (membersToReassign.length > 0) {
-      // 将所有待分配成员（包括原本未分配的）合并并按年龄排序
-      const allMembers = [...membersToReassign, ...allUnassignedMembers]
+      // 将所有待分配成员（包括原本未分配的）合并并按年龄排序，确保去重
+      const unassignedMembers = allUnassignedMembers.filter(m => !usedMemberNames.has(m.自选昵称))
+      const allMembers = [...membersToReassign, ...unassignedMembers]
       console.log('需要重新分配的成员总数:', allMembers.length)
       const sortedMembers = allMembers.sort((a, b) => {
         const ageA = Number(a.年龄) || 0
@@ -621,9 +653,9 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
           
           fixedGroups.push({
             id: `group_${fixedGroups.length + 1}`,
-            name: `第${fixedGroups.length + 1}组（${minAge}-${maxAge}岁）`,
+            name: `第${fixedGroups.length + 1}组`,
             members: bestGroup,
-            description: `年龄相近组（${minAge}-${maxAge}岁）`,
+            description: '',
             compatibility_score: 8.5 - minAgeGap * 0.2
           })
           
@@ -693,9 +725,11 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
       
       const proposal = JSON.parse(cleanedResult) as GroupingProposal
       
-      // 转换索引为实际用户数据
-      const processedGroups: Group[] = proposal.groups.map(g => ({
+      // 转换索引为实际用户数据，统一组名格式
+      const processedGroups: Group[] = proposal.groups.map((g, index) => ({
         ...g,
+        name: `第${index + 1}组`, // 统一组名为纯数字
+        description: '', // 移除描述
         members: (g.members as unknown as number[]).map(index => userData[index]).filter(Boolean),
         compatibility_score: 7.5 // 初始分数，等待审批
       }))
@@ -782,8 +816,8 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
         if (ageGap <= maxAgeGap) {
           groups.push({
             id: `group_${groups.length + 1}`,
-            name: `第${groups.length + 1}组：智能匹配组`,
-            description: `基于规则的智能分组（年龄跨度${ageGap}岁）`,
+            name: `第${groups.length + 1}组`,
+            description: '',
             members,
             compatibility_score: 7.0
           })
@@ -904,7 +938,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
       return {
         ...group,
         compatibility_score: score,
-        description: group.description + ` (年龄跨度${ageGap}岁)`
+        description: ''
       }
     })
     
@@ -966,9 +1000,32 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     ])
     setErrors([])
     
-    // 通知父组件状态变化
-    onStateChange?.({ preserveState: false, hasResults: false })
-  }, [onStateChange])
+    // 通知父组件重置状态
+    if (onResetState) {
+      onResetState()
+    } else {
+      onStateChange?.({ preserveState: false, hasResults: false })
+    }
+  }, [onStateChange, onResetState])
+
+  // 创建空组函数
+  const handleCreateEmptyGroup = useCallback(() => {
+    if (!matchingResult) return
+    
+    const nextGroupNumber = matchingResult.groups.length + 1
+    const newGroup: Group = {
+      id: `group_${nextGroupNumber}`,
+      name: `第${nextGroupNumber}组`,
+      members: [],
+      description: '',
+      compatibility_score: 0
+    }
+    
+    setMatchingResult({
+      ...matchingResult,
+      groups: [...matchingResult.groups, newGroup]
+    })
+  }, [matchingResult])
 
   const exportToExcel = useCallback(() => {
     if (!matchingResult) return
@@ -976,22 +1033,65 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     const wb = XLSX.utils.book_new()
     const excelData: any[] = []
     
+    // 导出已分组成员
     matchingResult.groups.forEach((group, groupIndex) => {
       const groupLetter = String.fromCharCode(65 + groupIndex)
       group.members.forEach((member, memberIndex) => {
         excelData.push({
           '分组': groupLetter,
           'NO.': memberIndex + 1,
+          '状态': '已分配',
           ...member
         })
       })
       
+      // 组之间添加空行
       if (groupIndex < matchingResult.groups.length - 1) {
         excelData.push({})
       }
     })
+    
+    // 如果有未分配成员，添加三行空行后导出
+    if (matchingResult.unassigned && matchingResult.unassigned.length > 0) {
+      // 添加三行空行分隔
+      excelData.push({})
+      excelData.push({})
+      excelData.push({})
+      
+      // 添加未分配成员标题
+      excelData.push({
+        '分组': '未分配',
+        'NO.': '',
+        '状态': '待分配',
+        '姓名': '--- 未分配人员 ---'
+      })
+      
+      // 添加未分配成员
+      matchingResult.unassigned.forEach((member, index) => {
+        excelData.push({
+          '分组': '未分配',
+          'NO.': index + 1,
+          '状态': '待分配',
+          ...member
+        })
+      })
+    }
 
     const ws = XLSX.utils.json_to_sheet(excelData)
+    
+    // 设置列宽
+    const colWidths = [
+      { wch: 8 },  // 分组
+      { wch: 6 },  // NO.
+      { wch: 8 },  // 状态
+      { wch: 12 }, // 姓名
+      { wch: 6 },  // 性别
+      { wch: 6 },  // 年龄
+      { wch: 15 }, // 职业
+      { wch: 12 }, // 其他字段
+    ]
+    ws['!cols'] = colWidths
+    
     XLSX.utils.book_append_sheet(wb, ws, '智能分组结果')
     
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
@@ -1097,9 +1197,6 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     <div className="page-container">
       <div className="preview-section">
         <div className="page-header">
-          <button className="back-button" onClick={handleResetUpload}>
-            ← 重新上传文件
-          </button>
           <h1 className="page-title">数据预览</h1>
         </div>
 
@@ -1225,15 +1322,12 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     <div className="page-container">
       <div className="results-section">
         <div className="page-header">
-          <button className="back-button" onClick={handleResetUpload}>
-            ← 返回重新分组
-          </button>
           <h1 className="page-title">🎉 智能匹配完成！</h1>
           <p className="page-subtitle">
             为 {userData.length} 位用户生成了 {matchingResult?.groups?.length || 0} 个最优小组
             （整体匹配度: {matchingResult?.overall_score?.toFixed(1) || 0}/10）
           </p>
-          {matchingResult?.unassigned?.length > 0 && (
+          {matchingResult && matchingResult.unassigned && matchingResult.unassigned.length > 0 && (
             <p className="page-subtitle" style={{ color: 'orange' }}>
               注意：有 {matchingResult.unassigned.length} 位用户因年龄约束未能分组
             </p>
@@ -1244,72 +1338,19 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
           <button className="export-button" onClick={exportToExcel}>
             📊 导出Excel结果
           </button>
-          <button 
-            className={`drag-mode-button ${isDragMode ? 'active' : ''}`}
-            onClick={() => setIsDragMode(!isDragMode)}
-          >
-            {isDragMode ? '退出编辑模式' : '✋ 拖拽调整分组'}
+          <button className="create-group-button" onClick={handleCreateEmptyGroup}>
+            ➕ 新建空组
           </button>
         </div>
 
-        {isDragMode && matchingResult ? (
+        {matchingResult && (
           <DraggableGroupManager
             result={matchingResult}
             onGroupsChange={setMatchingResult}
           />
-        ) : (
-          <div className="groups-container">
-          {matchingResult?.groups.map((group) => (
-            <div key={group.id} className="group-card">
-              <div className="group-header">
-                <h3 className="group-title">{group.name}</h3>
-                <div className="group-score">
-                  匹配度: {group.compatibility_score?.toFixed(2) || '0.00'}/10
-                </div>
-              </div>
-              <div className="group-description">{group.description}</div>
-              <div className="group-members-list">
-                <div className="member-header">
-                  <span className="header-nickname">自选昵称</span>
-                  <span className="header-age">年龄</span>
-                  <span className="header-gender">性别</span>
-                  <span className="header-job">职业</span>
-                </div>
-                {group.members.map((member, memberIndex) => (
-                  <div key={memberIndex} className="member-row">
-                    <span className="member-nickname">{member.自选昵称 || 'N/A'}</span>
-                    <span className="member-age">{member.年龄 || 'N/A'}</span>
-                    <span className="member-gender">{member.性别 || 'N/A'}</span>
-                    <span className="member-job">{member.职业 || 'N/A'}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          </div>
         )}
 
-        {!isDragMode && matchingResult?.unassigned && matchingResult.unassigned.length > 0 && (
-          <div className="unassigned-section">
-            <h3>待分组用户 ({matchingResult.unassigned.length} 人)</h3>
-            <div className="unassigned-members-list">
-              <div className="member-header">
-                <span className="header-nickname">自选昵称</span>
-                <span className="header-age">年龄</span>
-                <span className="header-gender">性别</span>
-                <span className="header-job">职业</span>
-              </div>
-              {matchingResult.unassigned.map((member, index) => (
-                <div key={index} className="member-row">
-                  <span className="member-nickname">{member.自选昵称 || 'N/A'}</span>
-                  <span className="member-age">{member.年龄 || 'N/A'}</span>
-                  <span className="member-gender">{member.性别 || 'N/A'}</span>
-                  <span className="member-job">{member.职业 || 'N/A'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* 由于现在使用DraggableGroupManager，移除了重复的未分配用户显示 */}
       </div>
     </div>
     )
@@ -1318,6 +1359,43 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
   // 主渲染
   return (
     <div className="matching-flow">
+      {/* 全局返回按钮 - 除了上传页面都显示 */}
+      {appState !== 'upload' && (
+        <button 
+          className="global-back-button" 
+          onClick={handleResetUpload}
+          style={{
+            position: 'fixed',
+            top: '20px',
+            left: '280px', // 考虑侧边栏宽度
+            zIndex: 1000,
+            padding: '10px 20px',
+            backgroundColor: '#fff',
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#333',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#f5f5f5';
+            e.currentTarget.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.15)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#fff';
+            e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.1)';
+          }}
+        >
+          ← 返回上传页面
+        </button>
+      )}
+      
       {appState === 'upload' && renderUploadPage()}
       {appState === 'validate' && showDataEditor && (
         <DataEditor

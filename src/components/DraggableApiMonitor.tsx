@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import ApiMonitor from './ApiMonitor'
+import ApiMonitor from './APIMonitor'
 
 interface DraggableApiMonitorProps {
   calls: any[]

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react'
+import '../styles/ApiMonitor.css'
 
 interface ApiCall {
   id: string

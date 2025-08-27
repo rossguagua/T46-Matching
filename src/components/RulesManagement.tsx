@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { MatchingRules, DEFAULT_RULES } from '../types/rules'
+import '../styles/RulesManagement.css'
 
 const RulesManagement: React.FC = () => {
   const [rules, setRules] = useState<MatchingRules>(DEFAULT_RULES)
@@ -73,7 +74,7 @@ const RulesManagement: React.FC = () => {
   }
 
   // 更新评分标准
-  const updateScoring = (field: string, value: number) => {
+  const updateScoring = (field: string, value: number | boolean) => {
     setRules(prev => ({
       ...prev,
       scoring: {
@@ -87,54 +88,60 @@ const RulesManagement: React.FC = () => {
   return (
     <div className="rules-management">
       <div className="page-header">
-        <h1 className="page-title">⚙️ 匹配规则管理</h1>
+        <h1 className="page-title">🛠️ 匹配规则管理</h1>
         <p className="page-subtitle">配置智能匹配的硬性规则、软性规则和评分标准</p>
-      </div>
-
-      {/* 操作按钮 */}
-      <div className="rules-actions">
-        <button 
-          className={`save-btn ${hasChanges ? 'has-changes' : ''}`}
-          onClick={saveRules}
-          disabled={!hasChanges}
-        >
-          {hasChanges ? '💾 保存更改' : '✅ 已保存'}
-        </button>
-        <button className="reset-btn" onClick={resetToDefault}>
-          🔄 重置为默认
-        </button>
       </div>
 
       {/* 标签页导航 */}
       <div className="rules-tabs">
         <button 
-          className={`tab ${activeTab === 'hard' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'hard' ? 'active' : ''}`}
           onClick={() => setActiveTab('hard')}
         >
-          硬性规则
+          <span className="tab-icon">🔧</span>
+          <span className="tab-text">硬性规则</span>
         </button>
         <button 
-          className={`tab ${activeTab === 'soft' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'soft' ? 'active' : ''}`}
           onClick={() => setActiveTab('soft')}
         >
-          软性规则
+          <span className="tab-icon">🎯</span>
+          <span className="tab-text">软性规则</span>
         </button>
         <button 
-          className={`tab ${activeTab === 'prompts' ? 'active' : ''}`}
-          onClick={() => setActiveTab('prompts')}
-        >
-          Prompt增强
-        </button>
-        <button 
-          className={`tab ${activeTab === 'scoring' ? 'active' : ''}`}
+          className={`tab-btn ${activeTab === 'scoring' ? 'active' : ''}`}
           onClick={() => setActiveTab('scoring')}
         >
-          评分标准
+          <span className="tab-icon">📊</span>
+          <span className="tab-text">评分标准</span>
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'prompts' ? 'active' : ''}`}
+          onClick={() => setActiveTab('prompts')}
+        >
+          <span className="tab-icon">✨</span>
+          <span className="tab-text">Prompt增强</span>
         </button>
       </div>
 
-      {/* 硬性规则标签 */}
-      {activeTab === 'hard' && (
+      {/* 主内容区域 */}
+      <div className="rules-content">
+        {/* 操作按钮 - 悬浮在右上角 */}
+        <div className="rules-actions">
+          <button 
+            className={`save-btn ${hasChanges ? 'has-changes' : ''}`}
+            onClick={saveRules}
+            disabled={!hasChanges}
+          >
+            {hasChanges ? '💾 保存更改' : '✅ 已保存'}
+          </button>
+          <button className="reset-btn" onClick={resetToDefault}>
+            🔄 重置为默认
+          </button>
+        </div>
+
+        {/* 硬性规则标签 */}
+        {activeTab === 'hard' && (
         <div className="tab-content hard-rules">
           <div className="rules-section">
             <h3>基本配置</h3>
@@ -626,6 +633,7 @@ const RulesManagement: React.FC = () => {
           </div>
         </div>
       )}
+      </div> {/* 结束 rules-content */}
     </div>
   )
 }

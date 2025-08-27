@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect } from 'react'
 import { DataValidator } from '../utils/dataValidator'
 import { DataQualityReport, DataIssue } from '../types/dataValidation'
 
@@ -459,7 +459,7 @@ const DataEditor: React.FC<DataEditorProps> = ({
             <button 
               className="btn btn-primary"
               onClick={handleConfirm}
-              disabled={qualityReport && qualityReport.issues.critical.length > 0}
+              disabled={!!qualityReport && qualityReport.issues.critical.length > 0}
             >
               {qualityReport && qualityReport.issues.critical.length > 0 
                 ? `请先修复${qualityReport.issues.critical.length}个关键问题`

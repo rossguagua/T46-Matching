@@ -1,0 +1,414 @@
+/* 匹配规则管理页面样式 - 大开大合设计 */
+.rules-management {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0;
+  overflow: hidden;
+}
+
+/* 不要使用 all: unset，会导致严重问题 */
+
+/* 页面头部 - 大气的渐变背景 */
+.rules-management .page-header {
+  padding: 60px 50px 40px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(248,249,250,0.95) 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,0.2);
+  animation: slideDown 0.6s ease-out;
+}
+
+.rules-management .page-title {
+  margin: 0;
+  font-size: 42px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.rules-management .page-subtitle {
+  margin-top: 12px;
+  font-size: 18px;
+  color: #6c757d;
+  font-weight: 400;
+}
+
+/* 主内容区域 */
+.rules-management .rules-content {
+  flex: 1;
+  padding: 40px 50px;
+  overflow-y: auto;
+  background: white;
+}
+
+/* 操作按钮区域 - 悬浮设计 */
+.rules-management .rules-actions {
+  display: flex;
+  gap: 20px;
+  padding: 30px 50px;
+  background: white;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.05);
+  border-top: 1px solid #e9ecef;
+  z-index: 10;
+}
+
+.rules-management button.save-btn,
+.rules-management button.reset-btn {
+  padding: 15px 30px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+  outline: none;
+  font-family: inherit;
+}
+
+.rules-management button.save-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  flex: 1;
+}
+
+.rules-management button.save-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+}
+
+.rules-management button.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.rules-management button.save-btn.has-changes {
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.rules-management button.reset-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.rules-management button.reset-btn:hover {
+  background: #c82333;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(220, 53, 69, 0.3);
+}
+
+/* 标签导航 - 更大更醒目 */
+.rules-management .rules-tabs {
+  display: flex;
+  gap: 10px;
+  padding: 20px 50px;
+  background: linear-gradient(to bottom, white 0%, #f8f9fa 100%);
+  border-bottom: 2px solid #e9ecef;
+}
+
+.rules-management .rules-tabs button.tab-btn {
+  padding: 15px 30px;
+  background: transparent;
+  border: 2px solid transparent;
+  color: #6c757d;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  margin: 0;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.rules-management .rules-tabs button.tab-btn:hover {
+  background: rgba(102, 126, 234, 0.1);
+  color: #495057;
+  border-color: rgba(102, 126, 234, 0.3);
+  transform: translateY(-2px);
+}
+
+.rules-management .rules-tabs button.tab-btn.active {
+  background: white;
+  color: #667eea;
+  border-color: #667eea;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+}
+
+/* 规则卡片 - 大气的卡片设计 */
+.rules-management .rules-section {
+  margin-bottom: 40px;
+  padding: 35px;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
+  border: 2px solid #e9ecef;
+  border-radius: 20px;
+  box-shadow: 0 6px 30px rgba(0, 0, 0, 0.06);
+  transition: all 0.3s ease;
+}
+
+.rules-management .rules-section:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+  border-color: #667eea;
+}
+
+.rules-management .rules-section h3 {
+  margin-bottom: 30px;
+  font-size: 24px;
+  font-weight: 700;
+  color: #2c3e50;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rules-management .rules-section h3::before {
+  content: '';
+  width: 4px;
+  height: 28px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 2px;
+}
+
+/* 规则项 - 更清晰的布局 */
+.rules-management .rule-item {
+  margin-bottom: 30px;
+  padding: 20px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.rules-management .rule-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.1);
+}
+
+.rules-management .rule-item label {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rules-management .rule-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.rules-management .rule-description {
+  font-size: 14px;
+  color: #6c757d;
+  margin-bottom: 8px;
+}
+
+/* 输入控件 - 统一风格 */
+.rules-management input[type="number"],
+.rules-management input[type="text"],
+.rules-management select,
+.rules-management textarea {
+  padding: 12px 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  font-size: 15px;
+  transition: all 0.2s ease;
+  background: white;
+  width: 100%;
+}
+
+.rules-management input[type="number"]:focus,
+.rules-management input[type="text"]:focus,
+.rules-management select:focus,
+.rules-management textarea:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+}
+
+.rules-management textarea {
+  min-height: 150px;
+  resize: vertical;
+  font-family: 'Monaco', 'Courier New', monospace;
+  line-height: 1.6;
+}
+
+/* 开关控件 */
+.rules-management .switch-control {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.rules-management .switch {
+  position: relative;
+  width: 60px;
+  height: 32px;
+}
+
+.rules-management .switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.rules-management .switch-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 34px;
+}
+
+.rules-management .switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 24px;
+  width: 24px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+.rules-management input:checked + .switch-slider {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.rules-management input:checked + .switch-slider:before {
+  transform: translateX(28px);
+}
+
+/* 网格布局 - 更好的空间利用 */
+.rules-management .rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 30px;
+}
+
+.rules-management .rules-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 25px;
+}
+
+/* 评分权重显示 */
+.rules-management .weight-display {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 15px;
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+.rules-management .weight-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.rules-management .weight-bar {
+  flex: 1;
+  height: 8px;
+  background: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rules-management .weight-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+/* 滚动条美化 */
+.rules-management .rules-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.rules-management .rules-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 5px;
+}
+
+.rules-management .rules-content::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 5px;
+}
+
+.rules-management .rules-content::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #5a67d8 0%, #6b42a0 100%);
+}
+
+/* 动画效果 */
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.rules-management .rules-section {
+  animation: slideUp 0.6s ease-out;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .rules-management .page-header {
+    padding: 40px 30px 30px;
+  }
+  
+  .rules-management .page-title {
+    font-size: 32px;
+  }
+  
+  .rules-management .rules-content {
+    padding: 30px;
+  }
+  
+  .rules-management .rules-grid {
+    grid-template-columns: 1fr;
+  }
+}

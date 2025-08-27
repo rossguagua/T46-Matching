@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { useState, useCallback, useEffect } from 'react'
 import { Group, UserData } from '../types/matching'
 
 interface GroupAdjusterProps {
@@ -217,7 +217,7 @@ const GroupAdjuster: React.FC<GroupAdjusterProps> = ({
 
     // 按性别和年龄排序
     const sortedUsers = [...allUsers].sort((a, b) => {
-      if (a.性别 !== b.性别) return a.性别 < b.性别 ? -1 : 1
+      if (a.性别 !== b.性别) return (a.性别 || '') < (b.性别 || '') ? -1 : 1
       return (Number(a.年龄) || 0) - (Number(b.年龄) || 0)
     })
 
@@ -272,6 +272,9 @@ const GroupAdjuster: React.FC<GroupAdjusterProps> = ({
 
   // 用户选择
   const handleUserSelect = useCallback((userId: string, e: React.MouseEvent) => {
+    // 防止事件冒泡影响滚动
+    e.stopPropagation()
+    
     if (e.shiftKey || isMultiSelectMode) {
       const newSelected = new Set(selectedUsers)
       if (newSelected.has(userId)) {
@@ -283,7 +286,7 @@ const GroupAdjuster: React.FC<GroupAdjusterProps> = ({
     }
   }, [selectedUsers, isMultiSelectMode])
 
-  // 创建新组
+  // 创建新组 - 支持在待分组区域创建多个空组
   const handleCreateGroup = useCallback(() => {
     const newGroup: Group = {
       id: `group_${Date.now()}`,
@@ -294,6 +297,21 @@ const GroupAdjuster: React.FC<GroupAdjusterProps> = ({
     }
     setGroups([...groups, newGroup])
   }, [groups])
+
+  // 创建多个空组 - 暂时注释掉，因为不需要批量创建
+  // const handleCreateMultipleGroups = useCallback((count: number) => {
+  //   const newGroups: Group[] = []
+  //   for (let i = 0; i < count; i++) {
+  //     newGroups.push({
+  //       id: `group_${Date.now()}_${i}`,
+  //       name: `新建组 ${groups.length + i + 1}`,
+  //       members: [],
+  //       description: '手动创建的分组',
+  //       compatibility_score: 0
+  //     })
+  //   }
+  //   setGroups([...groups, ...newGroups])
+  // }, [groups])
 
   // 删除空组
   const handleDeleteEmptyGroups = useCallback(() => {
@@ -389,121 +407,180 @@ const GroupAdjuster: React.FC<GroupAdjusterProps> = ({
           </div>
         </div>
 
-        {/* 主要内容区 */}
+        {/* 主要内容区 - 重构为上下两部分 */}
         <div className="adjuster-content">
-          {/* 分组区域 */}
-          <div className="groups-grid">
-            {groups.map(group => {
-              const stats = calculateGroupStats(group)
-              const score = groupScores[group.id] || 0
-              const filtered = filterUsers(group.members)
-              
-              return (
-                <div 
-                  key={group.id}
-                  className={`group-box ${dragOverGroup === group.id ? 'drag-over' : ''} ${highlightedGroup === group.id ? 'highlighted' : ''}`}
-                  onDragOver={(e) => handleDragOver(e, group.id)}
-                  onDragLeave={handleDragLeave}
-                  onDrop={(e) => handleDrop(e, group.id)}
-                  onMouseEnter={() => setHighlightedGroup(group.id)}
-                  onMouseLeave={() => setHighlightedGroup(null)}
-                >
-                  <div className="group-header">
-                    <h3>{group.name}</h3>
-                    <div className={`group-score ${score >= 8 ? 'high' : score >= 6 ? 'medium' : 'low'}`}>
-                      {score.toFixed(1)}
-                    </div>
-                  </div>
-                  
-                  <div className="group-stats">
-                    <span className={`stat ${stats.isFull ? 'full' : stats.total < 3 ? 'warning' : ''}`}>
-                      👥 {stats.total}/6
-                    </span>
-                    <span className={`stat ${stats.isBalanced ? 'balanced' : 'unbalanced'}`}>
-                      ⚖️ {stats.genderBalance}
-                    </span>
-                    <span className="stat">📅 {stats.avgAge}岁</span>
-                    <span className={`stat ${stats.ageGap > 10 ? 'warning' : ''}`}>
-                      ↔️ {stats.ageGap}岁差
-                    </span>
-                  </div>
-
-                  <div className="group-members">
-                    {filtered.length === 0 && group.members.length === 0 && (
-                      <div className="empty-placeholder">拖拽用户到这里</div>
-                    )}
-                    {filtered.length === 0 && group.members.length > 0 && (
-                      <div className="no-match-placeholder">没有匹配的用户</div>
-                    )}
-                    {filtered.map((member, index) => {
-                      const userId = `${group.id}-${member.姓名}`
-                      const isSelected = selectedUsers.has(userId)
-                      
-                      return (
-                        <div
-                          key={index}
-                          className={`member-card ${isSelected ? 'selected' : ''}`}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, member, group.id, index)}
-                          onClick={(e) => handleUserSelect(userId, e)}
-                        >
-                          <span className="member-name">{member.姓名 || '未知'}</span>
-                          <span className="member-info">{member.年龄}岁 {member.性别}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {selectedUsers.size > 0 && (
-                    <button 
-                      className="batch-move-here"
-                      onClick={() => handleBatchMove(group.id)}
-                    >
-                      移动选中到此组
-                    </button>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* 未分配区域 */}
-          <div 
-            className={`unassigned-box ${dragOverGroup === 'unassigned' ? 'drag-over' : ''}`}
-            onDragOver={(e) => handleDragOver(e, 'unassigned')}
-            onDragLeave={handleDragLeave}
-            onDrop={(e) => handleDrop(e, 'unassigned')}
-          >
-            <h3>未分配用户 ({unassigned.length})</h3>
-            
-            <div className="unassigned-members">
-              {filterUsers(unassigned).map((user, index) => {
-                const userId = `unassigned-${user.姓名}`
-                const isSelected = selectedUsers.has(userId)
+          {/* 分组区域 - 上半部分，可滚动 */}
+          <div className="groups-section">
+            <div className="groups-grid">
+              {groups.map(group => {
+                const stats = calculateGroupStats(group)
+                const score = groupScores[group.id] || 0
+                const filtered = filterUsers(group.members)
                 
                 return (
-                  <div
-                    key={index}
-                    className={`member-card ${isSelected ? 'selected' : ''}`}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, user, 'unassigned', index)}
-                    onClick={(e) => handleUserSelect(userId, e)}
+                  <div 
+                    key={group.id}
+                    className={`group-box ${dragOverGroup === group.id ? 'drag-over' : ''} ${highlightedGroup === group.id ? 'highlighted' : ''}`}
+                    onDragOver={(e) => handleDragOver(e, group.id)}
+                    onDragLeave={handleDragLeave}
+                    onDrop={(e) => handleDrop(e, group.id)}
+                    onMouseEnter={() => setHighlightedGroup(group.id)}
+                    onMouseLeave={() => setHighlightedGroup(null)}
                   >
-                    <span className="member-name">{user.姓名 || '未知'}</span>
-                    <span className="member-info">{user.年龄}岁 {user.性别} {user.职业}</span>
+                    <div className="group-header">
+                      <h3>{group.name}</h3>
+                      <div className={`group-score ${score >= 8 ? 'high' : score >= 6 ? 'medium' : 'low'}`}>
+                        {score.toFixed(1)}
+                      </div>
+                    </div>
+                    
+                    <div className="group-stats">
+                      <span className={`stat ${stats.isFull ? 'full' : stats.total < 3 ? 'warning' : ''}`}>
+                        👥 {stats.total}人
+                      </span>
+                      {stats.total > 1 && (
+                        <span className={`stat ${stats.ageGap > 10 ? 'warning' : ''}`}>
+                          年龄跨度{stats.ageGap}岁
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="group-members">
+                      {filtered.length === 0 && group.members.length === 0 && (
+                        <div className="empty-placeholder">拖拽用户到这里</div>
+                      )}
+                      {filtered.length === 0 && group.members.length > 0 && (
+                        <div className="no-match-placeholder">没有匹配的用户</div>
+                      )}
+                      {filtered.map((member, index) => {
+                        const userId = `${group.id}-${member.姓名}`
+                        const isSelected = selectedUsers.has(userId)
+                        
+                        return (
+                          <div
+                            key={index}
+                            className={`member-card ${isSelected ? 'selected' : ''}`}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, member, group.id, index)}
+                            onClick={(e) => {
+                              // 只在批量选择模式或按住shift时处理选择
+                              if (isMultiSelectMode || e.shiftKey) {
+                                handleUserSelect(userId, e)
+                              }
+                            }}
+                          >
+                            <span className="member-name">{member.姓名 || '未知'}</span>
+                            <span className="member-info">{member.年龄}岁 {member.性别}</span>
+                            {(member.开放程度 || member.能量指数) && (
+                              <div className="member-traits">
+                                {member.开放程度 && (
+                                  <span className="trait openness" title="开放程度">
+                                    🌟 {member.开放程度}
+                                  </span>
+                                )}
+                                {member.能量指数 && (
+                                  <span className="trait energy" title="能量指数">
+                                    ⚡ {member.能量指数}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {selectedUsers.size > 0 && (
+                      <button 
+                        className="batch-move-here"
+                        onClick={() => handleBatchMove(group.id)}
+                      >
+                        移动选中到此组
+                      </button>
+                    )}
                   </div>
                 )
               })}
             </div>
+          </div>
 
-            {selectedUsers.size > 0 && (
-              <button 
-                className="batch-move-here"
-                onClick={() => handleBatchMove('unassigned')}
-              >
-                移动选中到未分配
-              </button>
-            )}
+          {/* 待分组区域 - 固定在底部 */}
+          <div className="pending-section">
+            <div className="pending-header">
+              <h3>🎯 待分组人员 ({unassigned.length}人)</h3>
+              <div className="pending-actions">
+                <button 
+                  className="create-single-btn"
+                  onClick={handleCreateGroup}
+                  title="创建一个新的空组"
+                >
+                  ➕ 新建空组
+                </button>
+              </div>
+            </div>
+            
+            <div 
+              className={`pending-content ${dragOverGroup === 'unassigned' ? 'drag-over' : ''}`}
+              onDragOver={(e) => handleDragOver(e, 'unassigned')}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, 'unassigned')}
+            >
+              <div className="unassigned-members">
+                {filterUsers(unassigned).map((user, index) => {
+                  const userId = `unassigned-${user.姓名}`
+                  const isSelected = selectedUsers.has(userId)
+                  
+                  return (
+                    <div
+                      key={index}
+                      className={`member-card ${isSelected ? 'selected' : ''}`}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, user, 'unassigned', index)}
+                      onClick={(e) => {
+                        // 只在批量选择模式或按住shift时处理选择
+                        if (isMultiSelectMode || e.shiftKey) {
+                          handleUserSelect(userId, e)
+                        }
+                      }}
+                    >
+                      <span className="member-name">{user.姓名 || '未知'}</span>
+                      <span className="member-info">{user.年龄}岁 {user.性别} {user.职业}</span>
+                      {(user.开放程度 || user.能量指数) && (
+                        <div className="member-traits">
+                          {user.开放程度 && (
+                            <span className="trait openness" title="开放程度">
+                              🌟 {user.开放程度}
+                            </span>
+                          )}
+                          {user.能量指数 && (
+                            <span className="trait energy" title="能量指数">
+                              ⚡ {user.能量指数}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+                
+                {unassigned.length === 0 && (
+                  <div className="empty-placeholder">
+                    🎉 所有人员已分配完成！
+                  </div>
+                )}
+              </div>
+
+              {selectedUsers.size > 0 && (
+                <div className="batch-actions">
+                  <button 
+                    className="batch-move-here"
+                    onClick={() => handleBatchMove('unassigned')}
+                  >
+                    移动选中到待分组
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

@@ -51,7 +51,11 @@ ${profiles.map((p, i) => {
 【硬性约束 - 必须严格遵守】
 1. 每组必须恰好${currentRules.hardRules.groupSize}人
 2. ⚠️ 重要：组内任意两人年龄差必须不超过${currentRules.hardRules.maxAgeGap}岁（例如：如果组内有25岁的成员，其他成员年龄必须在22-28岁之间）
-3. 性别尽量均衡(理想${currentRules.hardRules.genderBalance.ideal.male}:${currentRules.hardRules.genderBalance.ideal.female}，可接受${currentRules.hardRules.genderBalance.acceptable.male}:${currentRules.hardRules.genderBalance.acceptable.female})
+3. ⚠️⚠️⚠️ 极其重要的性别比例约束：${
+  currentRules.hardRules.genderMode === 'all-female' 
+    ? '本次采用全女模式，每组必须是0男6女（全女组合）' 
+    : '本次采用混合模式，每组的性别比例只能是以下两种之一：\n   - 3男3女（平衡组合）\n   - 2男4女（女性为主）\n   绝对不允许出现1:5、4:2、5:1、0:6等其他比例！'
+}违反此规则的分组将被直接否决！
 
 ⚠️ 违反年龄差约束的分组将被视为无效！请确保每组内所有成员的年龄跨度不超过${currentRules.hardRules.maxAgeGap}岁。`
 

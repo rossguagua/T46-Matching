@@ -4,6 +4,11 @@ export interface MatchingRules {
   hardRules: {
     groupSize: number                    // 每组人数
     maxAgeGap: number                    // 最大年龄差
+    allowAgeGapExceptions: boolean       // 是否允许年龄差异常
+    mustAssignAll: boolean               // 是否必须分配所有成员
+    genderRatio: number                  // 性别比例（男性比例0-1）
+    strictGenderRatio: boolean           // 是否严格执行性别比例
+    genderMode: 'mixed' | 'all-female'  // 性别分组模式：mixed(3:3/2:4) 或 all-female(0:6)
     genderBalance: {
       ideal: { male: number; female: number }      // 理想性别比例
       acceptable: { male: number; female: number }  // 可接受性别比例
@@ -18,6 +23,22 @@ export interface MatchingRules {
       minOverlap: number        // 最小兴趣重叠数
       maxOverlap: number        // 最大兴趣重叠数
       weight: number           // 权重 (0-1)
+    }
+    personality: {
+      enabled: boolean
+      weight: number           // 性格互补权重 (0-1)
+    }
+    diversity: {
+      enabled: boolean
+      weight: number           // 职业多样性权重 (0-1)
+    }
+    communication: {
+      enabled: boolean
+      weight: number           // 沟通风格兼容权重 (0-1)
+    }
+    advanced?: {
+      enabled: boolean
+      depth?: number           // 分析深度 (1-10)
     }
     socialStyle: {
       enabled: boolean
@@ -43,16 +64,21 @@ export interface MatchingRules {
   
   // 自定义prompt增强
   customPrompts: {
-    userAnalysis: string        // 用户分析额外提示
-    grouping: string           // 分组生成额外提示
-    evaluation: string         // 评估审核额外提示
+    analysis: string           // 分析Prompt
+    generation: string         // 生成Prompt
+    evaluation: string         // 评估Prompt
+    userAnalysis?: string      // 用户分析额外提示（兼容旧版）
+    grouping?: string          // 分组生成额外提示（兼容旧版）
   }
   
   // 评分标准
   scoring: {
     passThreshold: number      // 通过分数线
+    goodThreshold: number      // 良好分数线
     excellentThreshold: number // 优秀分数线
     perfectThreshold: number   // 完美分数线
+    minAcceptable: number      // 最低接受分数
+    strictMode: boolean | number // 严格评分模式
   }
 }
 
@@ -61,6 +87,11 @@ export const DEFAULT_RULES: MatchingRules = {
   hardRules: {
     groupSize: 6,
     maxAgeGap: 8,
+    allowAgeGapExceptions: false,
+    mustAssignAll: true,
+    genderRatio: 0.5,
+    strictGenderRatio: false,
+    genderMode: 'mixed',  // 默认使用混合模式
     genderBalance: {
       ideal: { male: 3, female: 3 },
       acceptable: { male: 4, female: 2 },
@@ -73,6 +104,22 @@ export const DEFAULT_RULES: MatchingRules = {
       minOverlap: 2,
       maxOverlap: 5,
       weight: 0.3
+    },
+    personality: {
+      enabled: true,
+      weight: 0.3
+    },
+    diversity: {
+      enabled: true,
+      weight: 0.2
+    },
+    communication: {
+      enabled: true,
+      weight: 0.2
+    },
+    advanced: {
+      enabled: false,
+      depth: 5
     },
     socialStyle: {
       enabled: true,
@@ -96,13 +143,18 @@ export const DEFAULT_RULES: MatchingRules = {
     }
   },
   customPrompts: {
+    analysis: '',
+    generation: '',
+    evaluation: '',
     userAnalysis: '',
-    grouping: '',
-    evaluation: ''
+    grouping: ''
   },
   scoring: {
     passThreshold: 7.0,
+    goodThreshold: 7.5,
     excellentThreshold: 8.5,
-    perfectThreshold: 9.5
+    perfectThreshold: 9.5,
+    minAcceptable: 5.0,
+    strictMode: false
   }
 }

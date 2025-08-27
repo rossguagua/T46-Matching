@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { useApiConfig } from '../hooks/useApiConfig'
-import LLMAdapter from '../llm-adapter'
 
 const LLMManagement: React.FC = () => {
   const {
     config,
     quotas,
     tests,
-    loading,
     providers,
     updateProvider,
     setActiveProvider,

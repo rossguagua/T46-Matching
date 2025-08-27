@@ -1,4 +1,5 @@
 import React from 'react'
+import SidebarApiMonitor from './SidebarApiMonitor'
 
 export type NavigationPage = 'matching' | 'rules-management' | 'llm-management' | 'api-monitor' | 'settings'
 
@@ -17,6 +18,8 @@ interface SidebarProps {
     totalCalls: number
     errorCount: number
   }
+  apiCalls?: any[]
+  quotaStatus?: any
   matchingState?: {
     preserveState: boolean
     hasResults: boolean
@@ -57,7 +60,7 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
   }
 ]
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, apiStatus, matchingState, onResetMatching }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, apiStatus, apiCalls = [], quotaStatus = {}, matchingState, onResetMatching }) => {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
@@ -113,20 +116,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onPageChange, apiStatus,
       )}
 
       <div className="sidebar-footer">
-        <div className="system-status">
-          <div className="status-item">
-            <span className="status-label">API状态</span>
-            <span className={`status-value ${apiStatus?.isOnline ? 'online' : 'offline'}`}>
-              {apiStatus?.isOnline ? '在线' : '离线'}
-            </span>
-          </div>
-          {apiStatus && (
-            <div className="status-item">
-              <span className="status-label">今日调用</span>
-              <span className="status-value">{apiStatus.totalCalls}</span>
-            </div>
-          )}
-        </div>
+        {apiStatus && (
+          <SidebarApiMonitor
+            calls={apiCalls}
+            quotaStatus={quotaStatus}
+            totalCalls={apiStatus.totalCalls}
+            errorCount={apiStatus.errorCount}
+            isOnline={apiStatus.isOnline}
+          />
+        )}
       </div>
     </div>
   )

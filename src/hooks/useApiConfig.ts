@@ -24,7 +24,7 @@ export const API_PROVIDERS: ApiProvider[] = [
         name: 'gemini-2.5-flash',
         displayName: 'Gemini 2.5 Flash (平衡)',
         type: 'universal',
-        maxTokens: 2000,
+        maxTokens: 8000,
         temperature: 0.2
       },
       {
@@ -132,18 +132,6 @@ const DEFAULT_CONFIG: ApiConfig = {
   lastUpdated: Date.now()
 }
 
-// 简单加密/解密函数（基础安全）
-const encrypt = (text: string): string => {
-  return btoa(unescape(encodeURIComponent(text)))
-}
-
-const decrypt = (encrypted: string): string => {
-  try {
-    return decodeURIComponent(escape(atob(encrypted)))
-  } catch {
-    return ''
-  }
-}
 
 export const useApiConfig = () => {
   const [config, setConfig] = useState<ApiConfig>(DEFAULT_CONFIG)
@@ -157,16 +145,12 @@ export const useApiConfig = () => {
       const saved = localStorage.getItem('t46-api-config')
       if (saved) {
         const parsed = JSON.parse(saved)
-        // 解密API密钥
-        const decryptedConfig = { ...parsed }
-        Object.keys(decryptedConfig.providers || {}).forEach(providerId => {
-          if (decryptedConfig.providers[providerId]?.apiKey) {
-            decryptedConfig.providers[providerId].apiKey = decrypt(decryptedConfig.providers[providerId].apiKey)
-          }
+        const loadedConfig = { ...parsed }
+        Object.keys(loadedConfig.providers || {}).forEach(providerId => {
           // 确保selectedModels存在且使用有效的模型
-          if (!decryptedConfig.providers[providerId]?.selectedModels) {
-            decryptedConfig.providers[providerId] = {
-              ...decryptedConfig.providers[providerId],
+          if (!loadedConfig.providers[providerId]?.selectedModels) {
+            loadedConfig.providers[providerId] = {
+              ...loadedConfig.providers[providerId],
               selectedModels: DEFAULT_CONFIG.providers[providerId]?.selectedModels || {}
             }
           }
@@ -174,10 +158,10 @@ export const useApiConfig = () => {
         // 合并配置，保留默认值
         setConfig({
           ...DEFAULT_CONFIG,
-          ...decryptedConfig,
+          ...loadedConfig,
           providers: {
             ...DEFAULT_CONFIG.providers,
-            ...decryptedConfig.providers
+            ...loadedConfig.providers
           }
         })
       } else {
@@ -193,12 +177,6 @@ export const useApiConfig = () => {
   const saveConfig = useCallback((newConfig: ApiConfig) => {
     try {
       const toSave = { ...newConfig }
-      // 加密API密钥
-      Object.keys(toSave.providers).forEach(providerId => {
-        if (toSave.providers[providerId].apiKey) {
-          toSave.providers[providerId].apiKey = encrypt(toSave.providers[providerId].apiKey)
-        }
-      })
       toSave.lastUpdated = Date.now()
       localStorage.setItem('t46-api-config', JSON.stringify(toSave))
       setConfig(newConfig)
@@ -257,7 +235,7 @@ export const useApiConfig = () => {
       const startTime = Date.now()
       const result = await llmAdapter.generateContent(provider.testPrompt, {
         provider: providerId as any,
-        model: model,
+        model: modelId,
         temperature: 0.1,
         maxTokens: 50,
         apiKey: providerConfig.apiKey
@@ -269,8 +247,8 @@ export const useApiConfig = () => {
         throw new Error(result.error)
       }
 
-      if (!result.text || result.text.length < 3) {
-        throw new Error('API响应内容过短或为空')
+      if (!result.text) {
+        throw new Error('API响应内容为空')
       }
       
       setTests(prev => ({
