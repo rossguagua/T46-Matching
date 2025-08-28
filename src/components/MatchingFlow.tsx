@@ -94,9 +94,10 @@ interface MatchingFlowProps {
   onStateChange?: (state: { preserveState?: boolean; hasResults?: boolean; lastCompletedStep?: string }) => void
   onResetState?: () => void
   forceReset?: boolean
+  onProcessDataChange?: (data: { steps: any[]; currentData?: any }) => void
 }
 
-const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, onStateChange, onResetState, forceReset }) => {
+const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, onStateChange, onResetState, forceReset, onProcessDataChange }) => {
   const { getActiveProviderConfig, isConfigValid } = useApiConfig()
   const { rules, generateGroupingPrompt, generateEvaluationPrompt, generateUserAnalysisPrompt } = useMatchingRules()
   
@@ -218,10 +219,23 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
 
   // 进度更新函数
   const updateProgress = useCallback((step: number, status: MatchingProgress['status'], details: string, progress: number = 0) => {
-    setMatchingProgress(prev => prev.map(p => 
-      p.step === step ? { ...p, status, details, progress } : p
-    ))
-  }, [])
+    setMatchingProgress(prev => {
+      const updated = prev.map(p => 
+        p.step === step ? { ...p, status, details, progress } : p
+      )
+      
+      // 同步更新流程总览数据
+      onProcessDataChange?.({
+        steps: updated,
+        currentData: {
+          userData,
+          // 这里可以根据需要添加其他流程数据
+        }
+      })
+      
+      return updated
+    })
+  }, [onProcessDataChange, userData])
 
   // 通用LLM调用函数（带重试机制）
   const callLLM = useCallback(async (

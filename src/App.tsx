@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import Sidebar, { NavigationPage } from './components/Sidebar'
 import MatchingFlow from './components/MatchingFlow'
+import ProcessOverview from './components/ProcessOverview'
 import RulesManagement from './components/RulesManagement'
 import LLMManagement from './components/LLMManagement'
 import SystemSettings from './components/SystemSettings'
@@ -46,6 +47,73 @@ function App() {
     hasResults: false,
     forceReset: false
   })
+  
+  // 流程数据状态 - 用于流程总览页面
+  const [processData, setProcessData] = useState<{
+    steps: any[]
+    currentData?: any
+  }>({
+    steps: [],
+    currentData: null
+  })
+
+  // 从localStorage获取匹配数据用于流程总览
+  const getStoredMatchingData = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('t46-matching-state')
+      if (stored) {
+        const data = JSON.parse(stored)
+        return {
+          userData: data.userData || [],
+          profiles: data.userData ? data.userData.map((user: any, index: number) => ({
+            user_id: `user_${index + 1}`,
+            personality_summary: '已分析',
+            ...user
+          })) : [],
+          proposals: data.matchingResult ? [{ groups: data.matchingResult.groups }] : [],
+          reviewResults: data.matchingResult ? [{ approved: true, overall_score: data.matchingResult.overall_score }] : [],
+          optimizedResult: data.matchingResult || null,
+          finalResult: data.matchingResult || null
+        }
+      }
+    } catch (error) {
+      console.error('读取匹配数据失败:', error)
+    }
+    
+    // 返回演示数据
+    return {
+      userData: [
+        { 自选昵称: '张三', 性别: '男', 年龄: 28, 职业: '工程师' },
+        { 自选昵称: '李四', 性别: '女', 年龄: 25, 职业: '设计师' },
+        { 自选昵称: '王五', 性别: '男', 年龄: 30, 职业: '产品经理' },
+        { 自选昵称: '赵六', 性别: '女', 年龄: 27, 职业: '运营' }
+      ],
+      profiles: [
+        { user_id: 'user_1', personality_summary: '外向型技术专家' },
+        { user_id: 'user_2', personality_summary: '创意型设计师' },
+        { user_id: 'user_3', personality_summary: '领导型产品专家' },
+        { user_id: 'user_4', personality_summary: '沟通型运营专家' }
+      ],
+      proposals: [
+        { 
+          groups: [
+            { id: 'group_1', name: '第1组', members: [], description: '' },
+            { id: 'group_2', name: '第2组', members: [], description: '' }
+          ]
+        }
+      ],
+      reviewResults: [{ approved: true, overall_score: 8.5 }],
+      optimizedResult: { overall_score: 9.0 },
+      finalResult: { 
+        groups: [
+          { members: [{}, {}] },
+          { members: [{}, {}] }
+        ],
+        unassigned: [],
+        overall_score: 9.0
+      }
+    }
+  }, [])
   
   // API监控状态（保持原有逻辑）
   const [apiMonitor, setApiMonitor] = useState<ApiMonitorState>({
@@ -160,7 +228,63 @@ function App() {
             onStateChange={handleMatchingStateChange}
             onResetState={handleResetMatching}
             forceReset={matchingState.forceReset}
+            onProcessDataChange={setProcessData}
           />
+        )
+      case 'process-overview':
+        const currentData = getStoredMatchingData()
+        const hasRealData = currentData.userData.length > 4 // 判断是否有真实数据
+        
+        return (
+          <div className="page-wrapper">
+            <ProcessOverview 
+              steps={processData.steps.length > 0 ? processData.steps : [
+                { 
+                  step: 1, 
+                  stepName: 'AI问卷深度分析', 
+                  status: hasRealData ? 'completed' : 'pending', 
+                  details: hasRealData ? `已分析${currentData.userData.length}位用户` : '准备分析用户问卷...', 
+                  progress: hasRealData ? 100 : 0 
+                },
+                { 
+                  step: 2, 
+                  stepName: '用户档案标准化', 
+                  status: hasRealData ? 'completed' : 'pending', 
+                  details: hasRealData ? '档案标准化完成' : '准备标准化档案...', 
+                  progress: hasRealData ? 100 : 0 
+                },
+                { 
+                  step: 3, 
+                  stepName: 'MatchingAgent生成方案', 
+                  status: hasRealData ? 'completed' : 'running', 
+                  details: hasRealData ? '分组方案已生成' : '正在生成分组方案...', 
+                  progress: hasRealData ? 100 : 60 
+                },
+                { 
+                  step: 4, 
+                  stepName: 'ReviewAgent严格审批', 
+                  status: hasRealData ? 'completed' : 'pending', 
+                  details: hasRealData ? '方案审批通过' : '等待审批...', 
+                  progress: hasRealData ? 100 : 0 
+                },
+                { 
+                  step: 5, 
+                  stepName: '智能优化循环', 
+                  status: hasRealData ? 'completed' : 'pending', 
+                  details: hasRealData ? '优化完成' : '准备优化...', 
+                  progress: hasRealData ? 100 : 0 
+                },
+                { 
+                  step: 6, 
+                  stepName: '最终确认输出', 
+                  status: hasRealData ? 'completed' : 'pending', 
+                  details: hasRealData ? '最终结果已确认' : '准备生成最终结果...', 
+                  progress: hasRealData ? 100 : 0 
+                }
+              ]}
+              currentData={currentData}
+            />
+          </div>
         )
       case 'rules-management':
         return (

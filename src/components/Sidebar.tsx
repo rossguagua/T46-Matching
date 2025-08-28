@@ -1,7 +1,7 @@
 import React from 'react'
 import SidebarApiMonitor from './SidebarApiMonitor'
 
-export type NavigationPage = 'matching' | 'rules-management' | 'llm-management' | 'api-monitor' | 'settings'
+export type NavigationPage = 'matching' | 'process-overview' | 'rules-management' | 'llm-management' | 'api-monitor' | 'settings'
 
 interface NavigationItem {
   id: NavigationPage
@@ -33,6 +33,12 @@ const NAVIGATION_ITEMS: NavigationItem[] = [
     label: '智能分组',
     icon: '🧩',
     description: 'AI智能社交分组匹配'
+  },
+  {
+    id: 'process-overview',
+    label: '流程总览',
+    icon: '🔄',
+    description: '匹配流程可视化监控'
   },
   {
     id: 'rules-management',

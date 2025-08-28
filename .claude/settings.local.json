@@ -37,7 +37,9 @@
       "Bash(del nul)",
       "Bash(rm:*)",
       "Bash(git commit:*)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(node:*)",
+      "Read(C:\\Users\\Ross\\Desktop/**)"
     ],
     "deny": [],
     "ask": []
