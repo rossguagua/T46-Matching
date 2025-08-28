@@ -17,6 +17,11 @@ interface DragState {
 }
 
 const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, onGroupsChange }) => {
+  // 生成用户唯一ID的函数 - 修复数据不一致问题
+  const getUserUniqueId = useCallback((member: any, index?: number) => {
+    return `${member.自选昵称 || member.姓名 || member.name || 'user'}_${member.年龄 || 0}_${member.性别 || 'unknown'}_${index || 0}`
+  }, [])
+
   const [dragState, setDragState] = useState<DragState>({
     isDragging: false,
     draggedMember: null,
@@ -90,16 +95,18 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
     let newUnassigned = [...(result.unassigned || [])]
 
     // 从未分配列表中移除拖拽的成员
-    newUnassigned = newUnassigned.filter(m => 
-      m.自选昵称 !== dragState.draggedMember.自选昵称
+    const draggedMemberId = getUserUniqueId(dragState.draggedMember)
+    newUnassigned = newUnassigned.filter((m, idx) => 
+      getUserUniqueId(m, idx) !== draggedMemberId
     )
 
     // 找到目标组并进行互换
     const targetGroup = newGroups.find(g => g.id === targetGroupId)
     if (targetGroup) {
       // 找到目标成员在组中的索引
-      const targetMemberIndex = targetGroup.members.findIndex(m => 
-        m.自选昵称 === targetMember.自选昵称
+      const targetMemberId = getUserUniqueId(targetMember)
+      const targetMemberIndex = targetGroup.members.findIndex((m, idx) => 
+        getUserUniqueId(m, idx) === targetMemberId
       )
       
       if (targetMemberIndex !== -1) {
@@ -138,19 +145,20 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
     const newGroups = [...result.groups]
     let newUnassigned = [...(result.unassigned || [])]
 
-    // 从源组移除成员 - 使用昵称进行精确匹配
+    // 从源组移除成员 - 使用可靠的唯一ID进行精确匹配
+    const draggedMemberId = getUserUniqueId(dragState.draggedMember)
     if (dragState.draggedFromGroup === 'unassigned') {
       const beforeCount = newUnassigned.length
-      newUnassigned = newUnassigned.filter(m => 
-        m.自选昵称 !== dragState.draggedMember.自选昵称
+      newUnassigned = newUnassigned.filter((m, idx) => 
+        getUserUniqueId(m, idx) !== draggedMemberId
       )
       console.log('从未分配移除:', beforeCount, '->', newUnassigned.length)
     } else {
       const sourceGroup = newGroups.find(g => g.id === dragState.draggedFromGroup)
       if (sourceGroup) {
         const beforeCount = sourceGroup.members.length
-        sourceGroup.members = sourceGroup.members.filter(m => 
-          m.自选昵称 !== dragState.draggedMember.自选昵称
+        sourceGroup.members = sourceGroup.members.filter((m, idx) => 
+          getUserUniqueId(m, idx) !== draggedMemberId
         )
         console.log(`从${sourceGroup.name}移除:`, beforeCount, '->', sourceGroup.members.length)
       }
@@ -169,7 +177,23 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
     }
 
     const totalAfter = newGroups.reduce((sum, g) => sum + g.members.length, 0) + newUnassigned.length
+    const totalBefore = result.groups.reduce((sum, g) => sum + g.members.length, 0) + (result.unassigned?.length || 0)
+    
     console.log('总人数后:', totalAfter)
+    
+    // 数据完整性验证 - 防止数据丢失或重复
+    if (totalAfter !== totalBefore) {
+      console.error('❌ 拖拽操作导致数据不一致!', {
+        操作: `从${dragState.draggedFromGroup}移动到${targetGroupId}`,
+        用户: dragState.draggedMember.自选昵称 || '未知',
+        处理前总数: totalBefore,
+        处理后总数: totalAfter,
+        数据差异: totalBefore - totalAfter
+      })
+      // 不执行更新，保持原状态
+      handleDragEnd()
+      return
+    }
 
     // 更新结果
     onGroupsChange({
@@ -220,7 +244,7 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
                 
                 const renderMember = (member: any, idx: number) => (
                   <div
-                    key={`${group.id}_${idx}_${member.自选昵称 || member.name || idx}`}
+                    key={`${group.id}_${idx}_${getUserUniqueId(member, idx)}`}
                     className={`member-card draggable ${
                       dragState.draggedOverMemberName === member.自选昵称 && dragState.draggedFromGroup === 'unassigned' 
                         ? 'swap-target' 
@@ -312,7 +336,7 @@ const DraggableGroupManager: React.FC<DraggableGroupManagerProps> = ({ result, o
         <div className="unassigned-members">
           {result.unassigned && result.unassigned.length > 0 ? result.unassigned.map((member, idx) => (
             <div
-              key={`unassigned_${member.自选昵称 || member.name || idx}`}
+              key={`unassigned_${getUserUniqueId(member, idx)}`}
               className={`member-card draggable ${
                 dragState.isDragging && dragState.draggedMember === member 
                   ? 'dragging' 

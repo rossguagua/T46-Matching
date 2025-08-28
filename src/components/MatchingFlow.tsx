@@ -586,7 +586,12 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     
     // 先收集所有需要重新分配的成员
     let membersToReassign: UserData[] = []
-    const usedMemberNames = new Set<string>() // 防止成员重复
+    const usedMemberIds = new Set<string>() // 使用更可靠的唯一标识符
+    
+    // 生成用户唯一ID的函数
+    const getUserId = (member: UserData, index: number) => {
+      return `${member.自选昵称 || member.姓名 || 'user'}_${member.年龄 || 0}_${member.性别 || 'unknown'}_${index}`
+    }
     
     // 检查每个组的年龄约束
     proposal.groups.forEach(group => {
@@ -597,7 +602,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
         // 如果没有年龄信息，保持原组
         fixedGroups.push(group)
         // 记录已使用的成员
-        members.forEach(m => usedMemberNames.add(m.自选昵称))
+        members.forEach((m, idx) => usedMemberIds.add(getUserId(m, idx)))
         return
       }
       
@@ -609,14 +614,15 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
         // 年龄差符合要求且人数正确，保持原组
         fixedGroups.push(group)
         // 记录已使用的成员
-        members.forEach(m => usedMemberNames.add(m.自选昵称))
+        members.forEach((m, idx) => usedMemberIds.add(getUserId(m, idx)))
       } else {
         // 需要重新分配，但要去重
         console.warn(`组 ${group.name} 年龄差为 ${ageGap} 岁或人数不对，需要重新分配`)
-        members.forEach(member => {
-          if (!usedMemberNames.has(member.自选昵称)) {
+        members.forEach((member, idx) => {
+          const memberId = getUserId(member, idx)
+          if (!usedMemberIds.has(memberId)) {
             membersToReassign.push(member)
-            usedMemberNames.add(member.自选昵称)
+            usedMemberIds.add(memberId)
           }
         })
       }
@@ -625,7 +631,7 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
     // 如果有成员需要重新分配
     if (membersToReassign.length > 0) {
       // 将所有待分配成员（包括原本未分配的）合并并按年龄排序，确保去重
-      const unassignedMembers = allUnassignedMembers.filter(m => !usedMemberNames.has(m.自选昵称))
+      const unassignedMembers = allUnassignedMembers.filter((m, idx) => !usedMemberIds.has(getUserId(m, idx)))
       const allMembers = [...membersToReassign, ...unassignedMembers]
       console.log('需要重新分配的成员总数:', allMembers.length)
       const sortedMembers = allMembers.sort((a, b) => {
@@ -701,11 +707,28 @@ const MatchingFlow: React.FC<MatchingFlowProps> = ({ onApiCall, preserveState, o
       strategy: proposal.strategy + '\n[已应用年龄约束自动修正]'
     }
     
+    // 数据完整性验证
+    const totalMembersAfter = result.groups.reduce((sum, g) => sum + g.members.length, 0) + result.unassigned.length
+    const totalMembersBefore = proposal.groups.reduce((sum, g) => sum + g.members.length, 0) + (proposal.unassigned?.length || 0)
+    
     console.log('validateAndFixAgeConstraints 最终结果:', {
       groupCount: result.groups.length,
       unassignedCount: result.unassigned.length,
-      totalMembers: result.groups.reduce((sum, g) => sum + g.members.length, 0) + result.unassigned.length
+      totalMembersAfter,
+      totalMembersBefore,
+      dataIntegrityCheck: totalMembersAfter === totalMembersBefore ? '✅ 通过' : '❌ 数据丢失!'
     })
+    
+    // 如果数据不一致，记录详细信息用于调试
+    if (totalMembersAfter !== totalMembersBefore) {
+      console.error('❌ 数据完整性检查失败!', {
+        beforeGroups: proposal.groups.map(g => `${g.name}: ${g.members.length}人`),
+        beforeUnassigned: proposal.unassigned?.length || 0,
+        afterGroups: result.groups.map(g => `${g.name}: ${g.members.length}人`),
+        afterUnassigned: result.unassigned.length,
+        差异: totalMembersBefore - totalMembersAfter
+      })
+    }
     
     return result
   }, [rules.hardRules.maxAgeGap, rules.hardRules.groupSize])

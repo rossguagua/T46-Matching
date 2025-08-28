@@ -158,48 +158,79 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
     if (!item) return null
 
     if (stepNumber === 1 && type === 'input') {
-      // 用户数据
+      // 用户问卷原始数据 - 智能显示所有字段
+      // 首先获取所有非空字段
+      const fields: { label: string; value: any }[] = []
+      
+      // 尝试按优先级查找各种可能的字段名
+      const fieldMappings = [
+        { label: '昵称', keys: ['自选昵称', '姓名', '昵称', 'name', 'Name'] },
+        { label: '性别', keys: ['性别', 'gender', 'Gender', 'Sex'] },
+        { label: '年龄', keys: ['年龄', 'age', 'Age'] },
+        { label: '职业', keys: ['职业', 'profession', 'Profession', 'job', 'Job'] },
+        { label: '兴趣爱好', keys: ['兴趣爱好', '兴趣', 'interests', 'Interests', 'hobby', 'Hobby'] },
+        { label: '居住地', keys: ['居住城市或地区', '城市', '居住地', 'city', 'City', 'location'] },
+        { label: '价值观', keys: ['价值观/信仰', '价值观', '信仰', 'values', 'Values'] },
+        { label: '专业背景', keys: ['专业背景/技能', '专业背景', '技能', 'skills', 'Skills'] },
+        { label: '性格特征', keys: ['性格特征', '性格', 'personality', 'Personality'] },
+        { label: '社交偏好', keys: ['社交偏好', '社交风格', 'social', 'Social'] },
+        { label: '期待认识', keys: ['期待认识的人群类型', '期待认识', 'expected', 'Expected'] },
+        { label: '理想分组', keys: ['理想分组大小', '分组大小', 'group_size', 'GroupSize'] },
+        { label: '避免类型', keys: ['需要避免的人群类型', '避免类型', 'avoid', 'Avoid'] },
+        { label: '开放度', keys: ['对于现场话题和游戏的开放程度，你的接受度', '开放度', '接受度', 'openness', 'Openness'] }
+      ]
+      
+      // 提取姓名和性别年龄用于标题
+      let displayName = '未知用户'
+      let displayGender = '-'
+      let displayAge = '-'
+      
+      // 根据映射查找字段值
+      fieldMappings.forEach(mapping => {
+        let value = null
+        for (const key of mapping.keys) {
+          if (item[key] !== undefined && item[key] !== null && item[key] !== '') {
+            value = item[key]
+            break
+          }
+        }
+        
+        if (mapping.label === '昵称' && value) displayName = value
+        if (mapping.label === '性别' && value) displayGender = value
+        if (mapping.label === '年龄' && value) displayAge = value
+        
+        // 添加所有找到的字段
+        if (value !== null && value !== '') {
+          fields.push({ label: mapping.label, value })
+        }
+      })
+      
+      // 额外显示所有其他未映射的字段（用于调试）
+      const mappedKeys = fieldMappings.flatMap(m => m.keys)
+      Object.keys(item).forEach(key => {
+        if (!mappedKeys.includes(key) && item[key] && item[key] !== '') {
+          fields.push({ label: key, value: item[key] })
+        }
+      })
+      
       return (
         <div className="data-item-card">
           <div className="data-item-header">
-            <span className="data-item-name">{item.自选昵称 || item.姓名 || '未知用户'}</span>
-            <span className="data-item-badge">{item.性别 || '-'} · {item.年龄 || '-'}岁</span>
+            <span className="data-item-name">{displayName}</span>
+            <span className="data-item-badge">{displayGender} · {displayAge}岁</span>
           </div>
           <div className="data-item-content">
-            <div className="data-item-field">
-              <span className="field-label">职业：</span>
-              <span className="field-value">{item.职业 || '未填写'}</span>
-            </div>
-            <div className="data-item-field">
-              <span className="field-label">兴趣：</span>
-              <span className="field-value">{item.兴趣爱好 || '未填写'}</span>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    if (stepNumber === 1 && type === 'output') {
-      // 用户档案
-      return (
-        <div className="data-item-card">
-          <div className="data-item-header">
-            <span className="data-item-name">{item.user_id || '未知档案'}</span>
-            <span className="data-item-badge profile">档案</span>
-          </div>
-          <div className="data-item-content">
-            <div className="data-item-field">
-              <span className="field-label">性格总结：</span>
-              <span className="field-value">{item.personality_summary || '待分析'}</span>
-            </div>
-            <div className="data-item-field">
-              <span className="field-label">社交风格：</span>
-              <span className="field-value">{item.social_style || '待分析'}</span>
-            </div>
-            {item.interests && item.interests.length > 0 && (
+            {fields.length > 0 ? (
+              fields.map((field, idx) => (
+                <div key={idx} className="data-item-field">
+                  <span className="field-label">{field.label}：</span>
+                  <span className="field-value">{String(field.value)}</span>
+                </div>
+              ))
+            ) : (
               <div className="data-item-field">
-                <span className="field-label">兴趣标签：</span>
-                <span className="field-value">{item.interests.join(', ')}</span>
+                <span className="field-label">原始数据：</span>
+                <span className="field-value">{JSON.stringify(item)}</span>
               </div>
             )}
           </div>
@@ -207,8 +238,100 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
       )
     }
 
+    if (stepNumber === 1 && type === 'output') {
+      // AI分析后的用户档案 - 显示完整分析结果
+      return (
+        <div className="data-item-card">
+          <div className="data-item-header">
+            <span className="data-item-name">{item.user_id || item.name || '未知档案'}</span>
+            <span className="data-item-badge profile">AI档案</span>
+          </div>
+          <div className="data-item-content">
+            <div className="data-item-field">
+              <span className="field-label">基本信息：</span>
+              <span className="field-value">
+                {item.age}岁 · {item.gender} · {item.location || '未知地区'}
+              </span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">职业领域：</span>
+              <span className="field-value">{item.profession || '未分析'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">性格分析：</span>
+              <span className="field-value">{item.personality_summary || '待分析'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">社交风格：</span>
+              <span className="field-value">{item.social_style || '待分析'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">核心价值观：</span>
+              <span className="field-value">{item.core_values?.join(', ') || item.values || '待分析'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">兴趣标签：</span>
+              <span className="field-value">{item.interests?.join(', ') || '待分析'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">专业技能：</span>
+              <span className="field-value">{item.skills?.join(', ') || item.professional_skills || '待分析'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">匹配偏好：</span>
+              <span className="field-value">{item.preferred_match_types?.join(', ') || item.matching_preferences || '待分析'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">避免类型：</span>
+              <span className="field-value">{item.avoid_types?.join(', ') || item.avoid_preferences || '无特殊要求'}</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">AI洞察：</span>
+              <span className="field-value">{item.ai_insights || item.additional_notes || '暂无额外洞察'}</span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     if (stepNumber === 3 && type === 'output') {
-      // 分组方案
+      // 分组方案 - 显示详细分组信息
+      if (item.groups && Array.isArray(item.groups)) {
+        // 如果是完整方案，显示每个分组
+        return item.groups.map((group: any, idx: number) => (
+          <div key={idx} className="data-item-card">
+            <div className="data-item-header">
+              <span className="data-item-name">{group.groupName || `分组 ${idx + 1}`}</span>
+              <span className="data-item-badge proposal">{group.members?.length || 0}人</span>
+            </div>
+            <div className="data-item-content">
+              <div className="data-item-field">
+                <span className="field-label">成员：</span>
+                <span className="field-value">
+                  {group.members?.map((m: any) => m.name || m.user_id).join(', ') || '无成员'}
+                </span>
+              </div>
+              <div className="data-item-field">
+                <span className="field-label">组长：</span>
+                <span className="field-value">{group.leader || '待定'}</span>
+              </div>
+              <div className="data-item-field">
+                <span className="field-label">分组理由：</span>
+                <span className="field-value">{group.reason || group.groupingReason || '基于兴趣和性格匹配'}</span>
+              </div>
+              <div className="data-item-field">
+                <span className="field-label">共同兴趣：</span>
+                <span className="field-value">{group.commonInterests?.join(', ') || '多元化兴趣'}</span>
+              </div>
+              <div className="data-item-field">
+                <span className="field-label">匹配度：</span>
+                <span className="field-value">{group.matchScore ? `${(group.matchScore * 100).toFixed(0)}%` : '待评估'}</span>
+              </div>
+            </div>
+          </div>
+        ))
+      }
+      // 单个方案概览
       return (
         <div className="data-item-card">
           <div className="data-item-header">
@@ -232,13 +355,13 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
     }
 
     if (stepNumber === 4 && type === 'output') {
-      // 审批结果
+      // 审批结果 - 显示详细评审信息
       return (
         <div className="data-item-card">
           <div className="data-item-header">
-            <span className="data-item-name">审批结果</span>
+            <span className="data-item-name">审批结果 #{item.review_id || 1}</span>
             <span className={`data-item-badge ${item.approved ? 'approved' : 'rejected'}`}>
-              {item.approved ? '通过' : '未通过'}
+              {item.approved ? '通过' : '需优化'}
             </span>
           </div>
           <div className="data-item-content">
@@ -246,10 +369,32 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
               <span className="field-label">总体评分：</span>
               <span className="field-value">{item.overall_score?.toFixed(1) || '0.0'} / 10</span>
             </div>
-            {item.detailed_feedback && (
+            <div className="data-item-field">
+              <span className="field-label">平衡性：</span>
+              <span className="field-value">{item.balance_score?.toFixed(1) || '0.0'} / 10</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">兴趣匹配：</span>
+              <span className="field-value">{item.interest_match_score?.toFixed(1) || '0.0'} / 10</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">性格互补：</span>
+              <span className="field-value">{item.personality_complement_score?.toFixed(1) || '0.0'} / 10</span>
+            </div>
+            <div className="data-item-field">
+              <span className="field-label">详细反馈：</span>
+              <span className="field-value">{item.detailed_feedback || '无反馈'}</span>
+            </div>
+            {item.improvement_suggestions && (
               <div className="data-item-field">
-                <span className="field-label">反馈：</span>
-                <span className="field-value">{item.detailed_feedback}</span>
+                <span className="field-label">改进建议：</span>
+                <span className="field-value">{item.improvement_suggestions}</span>
+              </div>
+            )}
+            {item.specific_issues && item.specific_issues.length > 0 && (
+              <div className="data-item-field">
+                <span className="field-label">具体问题：</span>
+                <span className="field-value">{item.specific_issues.join('; ')}</span>
               </div>
             )}
           </div>
@@ -258,7 +403,69 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
     }
 
     if (stepNumber === 6 && type === 'output') {
-      // 最终结果
+      // 最终结果 - 显示完整分组详情
+      if (item.groups && Array.isArray(item.groups)) {
+        return (
+          <>
+            <div className="data-item-card">
+              <div className="data-item-header">
+                <span className="data-item-name">最终分组统计</span>
+                <span className="data-item-badge final">总览</span>
+              </div>
+              <div className="data-item-content">
+                <div className="data-item-field">
+                  <span className="field-label">总分组数：</span>
+                  <span className="field-value">{item.groups?.length || 0} 个组</span>
+                </div>
+                <div className="data-item-field">
+                  <span className="field-label">已分配人数：</span>
+                  <span className="field-value">
+                    {item.groups?.reduce((sum: number, g: any) => sum + (g.members?.length || 0), 0) || 0} 人
+                  </span>
+                </div>
+                <div className="data-item-field">
+                  <span className="field-label">未分配人数：</span>
+                  <span className="field-value">{item.unassigned?.length || 0} 人</span>
+                </div>
+                <div className="data-item-field">
+                  <span className="field-label">整体评分：</span>
+                  <span className="field-value">{item.overall_score?.toFixed(1) || '0.0'} / 10</span>
+                </div>
+              </div>
+            </div>
+            {item.groups.map((group: any, idx: number) => (
+              <div key={idx} className="data-item-card">
+                <div className="data-item-header">
+                  <span className="data-item-name">{group.groupName || `第${idx + 1}组`}</span>
+                  <span className="data-item-badge final">{group.members?.length || 0}人</span>
+                </div>
+                <div className="data-item-content">
+                  <div className="data-item-field">
+                    <span className="field-label">成员名单：</span>
+                    <span className="field-value">
+                      {group.members?.map((m: any, i: number) => 
+                        `${m.name || m.user_id}(${m.age}岁,${m.gender})`
+                      ).join(', ') || '无成员'}
+                    </span>
+                  </div>
+                  <div className="data-item-field">
+                    <span className="field-label">推荐组长：</span>
+                    <span className="field-value">{group.leader || '待定'}</span>
+                  </div>
+                  <div className="data-item-field">
+                    <span className="field-label">共同特征：</span>
+                    <span className="field-value">{group.commonTraits || group.groupingReason || '多元互补'}</span>
+                  </div>
+                  <div className="data-item-field">
+                    <span className="field-label">活动建议：</span>
+                    <span className="field-value">{group.suggestedActivities || '自由交流'}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </>
+        )
+      }
       return (
         <div className="data-item-card">
           <div className="data-item-header">
@@ -267,22 +474,8 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
           </div>
           <div className="data-item-content">
             <div className="data-item-field">
-              <span className="field-label">总分组数：</span>
-              <span className="field-value">{item.groups?.length || 0} 个组</span>
-            </div>
-            <div className="data-item-field">
-              <span className="field-label">已分配人数：</span>
-              <span className="field-value">
-                {item.groups?.reduce((sum: number, g: any) => sum + (g.members?.length || 0), 0) || 0} 人
-              </span>
-            </div>
-            <div className="data-item-field">
-              <span className="field-label">未分配人数：</span>
-              <span className="field-value">{item.unassigned?.length || 0} 人</span>
-            </div>
-            <div className="data-item-field">
-              <span className="field-label">整体评分：</span>
-              <span className="field-value">{item.overall_score?.toFixed(1) || '0.0'} / 10</span>
+              <span className="field-label">状态：</span>
+              <span className="field-value">待生成</span>
             </div>
           </div>
         </div>
@@ -332,7 +525,8 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
 
   return (
     <div className="process-overview">
-      <div className="page-header">
+      <div className="page-container">
+        <div className="page-header">
         <h1 className="page-title">🔄 AI匹配流程总览</h1>
         <p className="page-subtitle">查看每个处理步骤的详细输入输出和执行状态</p>
       </div>
@@ -468,13 +662,13 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
                       <div className="data-section">
                         <h4 className="section-title">📥 输入数据 ({data.inputs.length}条)</h4>
                         <div className="data-list">
-                          {data.inputs.slice(0, 5).map((item, index) => (
+                          {data.inputs.slice(0, 10).map((item, index) => (
                             <div key={index}>
                               {renderDataItem(item, 'input', step.step)}
                             </div>
                           ))}
-                          {data.inputs.length > 5 && (
-                            <div className="more-indicator">还有 {data.inputs.length - 5} 条数据...</div>
+                          {data.inputs.length > 10 && (
+                            <div className="more-indicator">还有 {data.inputs.length - 10} 条数据...</div>
                           )}
                           {data.inputs.length === 0 && (
                             <div className="no-data">暂无输入数据</div>
@@ -485,13 +679,13 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
                       <div className="data-section">
                         <h4 className="section-title">📤 输出数据 ({data.outputs.length}条)</h4>
                         <div className="data-list">
-                          {data.outputs.slice(0, 5).map((item, index) => (
-                            <div key={index}>
+                          {data.outputs.slice(0, 10).map((item, index) => (
+                            <React.Fragment key={index}>
                               {renderDataItem(item, 'output', step.step)}
-                            </div>
+                            </React.Fragment>
                           ))}
-                          {data.outputs.length > 5 && (
-                            <div className="more-indicator">还有 {data.outputs.length - 5} 条数据...</div>
+                          {data.outputs.length > 10 && (
+                            <div className="more-indicator">还有 {data.outputs.length - 10} 条数据...</div>
                           )}
                           {data.outputs.length === 0 && (
                             <div className="no-data">暂无输出数据</div>
@@ -505,6 +699,7 @@ const ProcessOverview: React.FC<ProcessOverviewProps> = ({ steps = [], currentDa
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )

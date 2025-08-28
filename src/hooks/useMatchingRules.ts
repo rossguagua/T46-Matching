@@ -169,16 +169,46 @@ ${currentRules.customPrompts.evaluation}`
   const generateUserAnalysisPrompt = useCallback((user: any) => {
     const currentRules = loadRules()
     
-    let prompt = `请对以下用户进行深度分析，返回JSON格式的心理档案：
+    // 智能字段映射，兼容不同的Excel字段名
+    const name = user.自选昵称 || user.姓名 || user.昵称 || user.name || '未知'
+    const gender = user.性别 || user.gender || '未知'
+    const age = user.年龄 || user.age || '未知'
+    const profession = user.职业 || user.profession || '未知'
+    const city = user.居住城市或地区 || user.城市 || user.居住地 || user.city || '未知'
+    const interests = user.兴趣爱好 || user.兴趣 || user.interests || '未知'
+    const values = user['价值观/信仰'] || user.价值观 || user.信仰 || '未知'
+    const skills = user['专业背景/技能'] || user.专业背景 || user.技能 || '未知'
+    const personality = user.性格特征 || user.personality || '未知'
+    const socialPreference = user.社交偏好 || user.社交风格 || '未知'
+    const expectedPeople = user.期待认识的人群类型 || user.期待认识 || '未知'
+    const avoidPeople = user.需要避免的人群类型 || user.避免类型 || '未知'
+    const idealGroupSize = user.理想分组大小 || user.分组大小 || '未知'
+    const openness = user['对于现场话题和游戏的开放程度，你的接受度'] || user.开放度 || user.接受度 || '未知'
+    
+    let prompt = `请对以下用户进行深度分析，生成详细的AI心理档案：
 
-用户信息：
-- 姓名：${user.姓名 || '未知'}
-- 性别：${user.性别 || '未知'}  
-- 年龄：${user.年龄 || '未知'}
-- 职业：${user.职业 || '未知'}
-- 城市：${user.城市 || '未知'}
-- 兴趣爱好：${user.兴趣爱好 || '未知'}
-- 其他信息：${JSON.stringify(user, null, 2)}`
+用户基本信息：
+- 昵称：${name}
+- 性别：${gender}  
+- 年龄：${age}
+- 职业：${profession}
+- 居住地：${city}
+
+个人特征：
+- 兴趣爱好：${interests}
+- 价值观/信仰：${values}
+- 专业背景/技能：${skills}
+- 性格特征：${personality}
+
+社交偏好：
+- 社交偏好：${socialPreference}
+- 期待认识的人群类型：${expectedPeople}
+- 需要避免的人群类型：${avoidPeople}
+- 理想分组大小：${idealGroupSize}
+- 活动开放度（1-10）：${openness}
+
+完整原始数据：
+${JSON.stringify(user, null, 2)}`
 
     // 添加自定义分析要求
     if (currentRules.customPrompts.userAnalysis) {
@@ -190,21 +220,37 @@ ${currentRules.customPrompts.userAnalysis}`
 
     prompt += `
 
-请分析并返回以下JSON格式：
+请基于以上信息进行深度心理分析，生成详细的用户档案，返回以下JSON格式：
 {
   "user_id": "用户唯一标识",
-  "personality_summary": "3-5句话的性格总结",
+  "name": "${name}",
+  "age": ${age === '未知' ? 'null' : age},
+  "gender": "${gender}",
+  "location": "${city}",
+  "profession": "${profession}",
+  "personality_summary": "基于所有信息的3-5句话深度性格分析总结",
   "social_style": "社交风格(主动发起者/积极参与者/善于倾听者/深度思考者)",
-  "interests": ["提取的兴趣标签列表"],
-  "energy_level": "能量水平(高能量/中能量/低能量)", 
-  "conversation_style": "对话风格描述",
-  "group_role_prediction": "在小组中可能的角色",
-  "mystery_tag": "神秘标签或特质",
-  "potential_connections": ["可能感兴趣的话题或活动"],
-  "personality_keywords": ["性格关键词列表"]
+  "core_values": ["从价值观信仰中提取的3-5个核心价值观"],
+  "interests": ["从兴趣爱好中提取的具体兴趣标签列表，至少5个"],
+  "professional_skills": ["从专业背景提取的技能列表"],
+  "energy_level": "能量水平(高能量/中能量/低能量)",
+  "conversation_style": "基于性格特征的对话风格描述",
+  "group_role_prediction": "基于社交偏好预测在小组中可能的角色",
+  "preferred_match_types": ["从期待认识的人群中提取的匹配偏好"],
+  "avoid_preferences": ["从需要避免的人群中提取的规避偏好"],
+  "openness_score": ${openness === '未知' ? 5 : openness},
+  "ideal_group_size_preference": "${idealGroupSize}",
+  "mystery_tag": "一个有趣的神秘标签或独特特质",
+  "potential_connections": ["基于兴趣和价值观推断的5个可能感兴趣的话题或活动"],
+  "personality_keywords": ["5-8个精准的性格关键词"],
+  "ai_insights": "AI对这个人的独特洞察和匹配建议（50-100字）",
+  "matching_preferences": "基于所有信息总结的匹配偏好说明"
 }
 
-请确保返回纯JSON格式，不要添加任何其他文本或代码块标记。`
+请确保：
+1. 充分利用用户提供的所有信息进行分析
+2. 返回的档案要具体、详细、有洞察力
+3. 返回纯JSON格式，不要添加任何markdown标记或代码块标记`
 
     return prompt
   }, [loadRules])
