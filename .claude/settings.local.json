@@ -39,7 +39,10 @@
       "Bash(git commit:*)",
       "Bash(git log:*)",
       "Bash(node:*)",
-      "Read(C:\\Users\\Ross\\Desktop/**)"
+      "Read(C:\\Users\\Ross\\Desktop/**)",
+      "Read(C:\\Users\\Ross\\Desktop/**)",
+      "Read(C:\\/**)",
+      "mcp__ide__executeCode"
     ],
     "deny": [],
     "ask": []

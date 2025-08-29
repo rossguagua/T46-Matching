@@ -5,6 +5,8 @@ import ProcessOverview from './components/ProcessOverview'
 import RulesManagement from './components/RulesManagement'
 import LLMManagement from './components/LLMManagement'
 import SystemSettings from './components/SystemSettings'
+import UserProfileLibrary from './components/UserProfileLibrary'
+import PromptEnhancement from './components/PromptEnhancement'
 // import DraggableApiMonitor from './components/DraggableApiMonitor'
 // import { useApiConfig } from './hooks/useApiConfig'
 
@@ -411,6 +413,18 @@ function App() {
               </p>
             </div>
           </div>
+          </div>
+        )
+      case 'user-profiles':
+        return (
+          <div className="page-wrapper">
+            <UserProfileLibrary />
+          </div>
+        )
+      case 'prompt-enhancement':
+        return (
+          <div className="page-wrapper">
+            <PromptEnhancement />
           </div>
         )
       case 'settings':
